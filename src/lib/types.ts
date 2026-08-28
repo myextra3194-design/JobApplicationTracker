@@ -1,11 +1,15 @@
 /**
  * The application record — the single data shape the whole app revolves around.
  *
- * Field list comes from Part 1 of the build plan (18 fields), plus:
- *  - identity/audit keys the plan implies but doesn't spell out (id, timestamps),
- *  - `archivedAt` / `deletedAt` for archive + undo-delete instead of hard delete,
- *  - `matchScore` / `cvVersionUsed` for lossless round-trips with the legacy
- *    `job-search-agent` CSV schema (decision D3 in PLAN.md).
+ * Field names are the plan's contract (`job-application-tracker-build-plan.md`
+ * Part 1). Any future rename gets a line in PLAN.md.
+ *
+ * Extra fields, documented:
+ *  - `id` / `createdAt` / `updatedAt` — identity the plan implies but doesn't spell out
+ *  - `deletedAt` — undo window between Part 2 "Delete" and Part 9 "Delete permanently"
+ *    (deviation: Part 1 only specifies `isArchived`)
+ *  - `matchScore` / `cvVersionUsed` — optional extras that tie this tracker to the
+ *    job-search-agent Score Job / Generate CV pages
  *
  * Everything is a plain JSON-serialisable value so the same shape can be stored in
  * localStorage today and POSTed to a REST endpoint later without a translation layer.
@@ -23,65 +27,65 @@ export const STATUSES = [
 
 export type ApplicationStatus = (typeof STATUSES)[number];
 
-export const INTERVIEW_STATUSES = [
+/**
+ * Plan types interviewStatus as free TEXT with "e.g." examples — not a closed set.
+ * A wrong stage on `status` would hide a card; a free-text interview status cannot.
+ */
+export const INTERVIEW_STATUS_SUGGESTIONS = [
   'Not scheduled',
   'Scheduled',
   'Completed',
   'Cancelled',
-  'No show',
 ] as const;
 
-export type InterviewStatus = (typeof INTERVIEW_STATUSES)[number];
-
-export const FINAL_RESULTS = [
-  'Pending',
-  'Offer accepted',
-  'Offer declined',
-  'Rejected',
-  'Withdrawn',
-  'No response',
-] as const;
-
-export type FinalResult = (typeof FINAL_RESULTS)[number];
+/**
+ * Plan types finalResult as free TEXT with "e.g." examples — not a closed set.
+ */
+export const FINAL_RESULT_SUGGESTIONS = ['Pending', 'Hired', 'Rejected', 'Ghosted'] as const;
 
 /** Only the storage driver changes between today and the backend upgrade. */
 export type StorageDriver = 'local' | 'rest';
 
-export interface ApplicationRecord {
+export interface JobApplication {
   id: string;
   createdAt: string;
   updatedAt: string;
-  /** Set instead of hard-deleting for archived rows (plan: archive/undo-delete). */
-  archivedAt: string | null;
-  /** Soft delete: null = live. Non-null = recoverable until purged. */
+  /**
+   * Soft-delete timestamp. Null = not in the trash.
+   * Deviation from Part 1 (which only has `isArchived`): this is the undo window
+   * between "Delete" and Part 9's "Delete permanently". Archive is never this.
+   */
   deletedAt: string | null;
+  /** Plan: boolean, default false. Archived rows leave the board but stay restorable. */
+  isArchived: boolean;
 
-  // --- the plan's 18 fields ---
-  company: string;
+  // --- the plan's fields ---
+  companyName: string;
   jobTitle: string;
   jobLocation: string;
   /** `YYYY-MM-DD`, or null when not yet applied (i.e. still Saved). */
   applicationDate: string | null;
-  /** Where it was found: Bayt, GulfTalent, LinkedIn, referral, ... */
+  /** Where it was found: LinkedIn, Indeed, company website, ... */
   jobPortal: string;
+  /** Closed set: a wrong stage = a card in no column. */
   status: ApplicationStatus;
   recruiterName: string;
   /** Free-form on purpose: email, phone, or both. */
   recruiterContact: string;
   followUpDate: string | null;
   interviewDate: string | null;
-  interviewStatus: InterviewStatus;
+  /** Free text. Empty normalises to 'Not scheduled'. */
+  interviewStatus: string;
   /** Free-form: "6,500 QAR + transport", "18 LPA", etc. */
   salary: string;
-  jobPostingUrl: string;
+  jobLink: string;
   notes: string;
-  companyResearchNotes: string;
+  companyResearch: string;
   tags: string[];
-  /** Keys into the AttachmentStore (IndexedDB now, object storage later). */
-  attachmentIds: string[];
-  finalResult: FinalResult;
+  /** Free text. Empty normalises to 'Pending'. */
+  finalResult: string;
 
-  // --- legacy compatibility (job-search-agent/utils/tracker.py) ---
+  // --- optional extras (job-search-agent Score Job / Generate CV) ---
   /** 0-100 from the Score Job page; null = not scored. */
   matchScore: number | null;
   cvVersionUsed: string | null;
@@ -89,33 +93,14 @@ export interface ApplicationRecord {
 
 /**
  * What a caller may supply when creating or importing. Identity and timestamps are
- * allowed but optional: a fresh row gets generated ones, while CSV import, backup
- * restore and test fixtures must be able to keep their own ids so undo/archive links
- * survive the round-trip.
+ * allowed but optional: a fresh row gets generated ones, while backup restore and
+ * test fixtures must be able to keep their own ids so undo/archive links survive
+ * the round-trip.
  */
-export type NewApplication = Partial<ApplicationRecord>;
+export type NewJobApplication = Partial<JobApplication>;
 
 /**
  * What an update may change. Identity and `createdAt` are excluded on purpose —
  * no code path should be able to rewrite which record it is or when it started.
  */
-export type ApplicationPatch = Partial<Omit<ApplicationRecord, 'id' | 'createdAt'>>;
-
-/**
- * Which fields hold a date. Used by reminders, calendar export and sorting, so
- * those features don't hard-code field names in three places.
- */
-export const DATE_FIELDS = ['applicationDate', 'followUpDate', 'interviewDate'] as const;
-export type DateField = (typeof DATE_FIELDS)[number];
-
-export const TEXT_FIELDS = [
-  'company',
-  'jobTitle',
-  'jobLocation',
-  'recruiterName',
-  'recruiterContact',
-  'salary',
-  'jobPostingUrl',
-  'notes',
-  'companyResearchNotes',
-] as const satisfies readonly (keyof ApplicationRecord)[];
+export type JobApplicationPatch = Partial<Omit<JobApplication, 'id' | 'createdAt'>>;

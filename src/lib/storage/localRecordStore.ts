@@ -1,6 +1,12 @@
 import { applyQuery, type ApplicationQuery } from '../query';
-import type { ApplicationRecord, ApplicationPatch, NewApplication, StorageDriver } from '../types';
-import { emptyApplication, mergeApplication, normalizeApplicationList, SCHEMA_VERSION, STORAGE_KEY } from '../normalize';
+import type { JobApplication, JobApplicationPatch, NewJobApplication, StorageDriver } from '../types';
+import {
+  emptyJobApplication,
+  mergeJobApplication,
+  normalizeJobApplicationList,
+  SCHEMA_VERSION,
+  STORAGE_KEY,
+} from '../normalize';
 import { NotFoundError, StorageFullError, type RecordStore } from './adapter';
 
 /**
@@ -16,7 +22,7 @@ import { NotFoundError, StorageFullError, type RecordStore } from './adapter';
 interface Envelope {
   version: number;
   savedAt: string;
-  records: ApplicationRecord[];
+  records: JobApplication[];
 }
 
 const emptyEnvelope = (): Envelope => ({ version: SCHEMA_VERSION, savedAt: '', records: [] });
@@ -40,14 +46,14 @@ function readEnvelope(key: string): Envelope {
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       // Accept a bare array: a hand-edited file, or an export pasted back in.
-      return { version: SCHEMA_VERSION, savedAt: '', records: normalizeApplicationList(parsed) };
+      return { version: SCHEMA_VERSION, savedAt: '', records: normalizeJobApplicationList(parsed) };
     }
     if (typeof parsed !== 'object' || parsed === null) return emptyEnvelope();
     const candidate = parsed as Record<string, unknown>;
     return {
       version: SCHEMA_VERSION,
       savedAt: typeof candidate.savedAt === 'string' ? candidate.savedAt : '',
-      records: normalizeApplicationList(candidate.records),
+      records: normalizeJobApplicationList(candidate.records),
     };
   } catch {
     // Corrupt JSON must not destroy the user's data: stash the original bytes, then
@@ -65,7 +71,7 @@ function readEnvelope(key: string): Envelope {
   }
 }
 
-function writeEnvelope(key: string, records: ApplicationRecord[]): void {
+function writeEnvelope(key: string, records: JobApplication[]): void {
   const envelope: Envelope = { version: SCHEMA_VERSION, savedAt: new Date().toISOString(), records };
   try {
     globalThis.localStorage?.setItem(key, JSON.stringify(envelope));
@@ -105,37 +111,37 @@ export class LocalRecordStore implements RecordStore {
     return readEnvelope(this.storageKey);
   }
 
-  private write(records: ApplicationRecord[]): void {
+  private write(records: JobApplication[]): void {
     writeEnvelope(this.storageKey, records);
   }
 
-  async all(): Promise<ApplicationRecord[]> {
+  async all(): Promise<JobApplication[]> {
     return this.tx(() => this.read().records);
   }
 
-  async list(query: ApplicationQuery = {}): Promise<ApplicationRecord[]> {
+  async list(query: ApplicationQuery = {}): Promise<JobApplication[]> {
     return this.tx(() => applyQuery(this.read().records, query));
   }
 
-  async get(id: string): Promise<ApplicationRecord | null> {
+  async get(id: string): Promise<JobApplication | null> {
     return this.tx(() => this.read().records.find((r) => r.id === id) ?? null);
   }
 
-  async create(input: NewApplication = {}): Promise<ApplicationRecord> {
+  async create(input: NewJobApplication = {}): Promise<JobApplication> {
     return this.tx(() => {
-      const record = emptyApplication(input);
+      const record = emptyJobApplication(input);
       this.write([...this.read().records, record]);
       return record;
     });
   }
 
-  async update(id: string, patch: ApplicationPatch): Promise<ApplicationRecord> {
+  async update(id: string, patch: JobApplicationPatch): Promise<JobApplication> {
     return this.tx(() => {
       const { records } = this.read();
       const index = records.findIndex((r) => r.id === id);
       const current = index === -1 ? undefined : records[index];
       if (!current) throw new NotFoundError(id);
-      const next = mergeApplication(current, { ...patch, updatedAt: new Date().toISOString() });
+      const next = mergeJobApplication(current, { ...patch, updatedAt: new Date().toISOString() });
       const copy = [...records];
       copy[index] = next;
       this.write(copy);
@@ -148,23 +154,23 @@ export class LocalRecordStore implements RecordStore {
   }
 
   async restore(id: string): Promise<void> {
-    await this.update(id, { deletedAt: null, archivedAt: null });
+    await this.update(id, { deletedAt: null, isArchived: false });
   }
 
-  async setArchived(id: string, archived: boolean): Promise<ApplicationRecord> {
-    return this.update(id, { archivedAt: archived ? new Date().toISOString() : null });
+  async setArchived(id: string, archived: boolean): Promise<JobApplication> {
+    return this.update(id, { isArchived: archived });
   }
 
-  async bulkPatch(ids: readonly string[], patch: ApplicationPatch): Promise<ApplicationRecord[]> {
+  async bulkPatch(ids: readonly string[], patch: JobApplicationPatch): Promise<JobApplication[]> {
     if (ids.length === 0) return [];
     const wanted = new Set(ids);
     return this.tx(() => {
       const { records } = this.read();
       const stamp = new Date().toISOString();
-      const touched: ApplicationRecord[] = [];
+      const touched: JobApplication[] = [];
       const next = records.map((r) => {
         if (!wanted.has(r.id)) return r;
-        const merged = mergeApplication(r, { ...patch, updatedAt: stamp });
+        const merged = mergeJobApplication(r, { ...patch, updatedAt: stamp });
         touched.push(merged);
         return merged;
       });
@@ -179,9 +185,9 @@ export class LocalRecordStore implements RecordStore {
     return touched.length;
   }
 
-  async replaceAll(records: readonly ApplicationRecord[]): Promise<ApplicationRecord[]> {
+  async replaceAll(records: readonly JobApplication[]): Promise<JobApplication[]> {
     return this.tx(() => {
-      const normalized = normalizeApplicationList(records);
+      const normalized = normalizeJobApplicationList(records);
       this.write(normalized);
       return normalized;
     });

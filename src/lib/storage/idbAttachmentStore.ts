@@ -7,6 +7,10 @@ import type { Attachment, AttachmentMeta, AttachmentStore, NewAttachment } from 
 /**
  * IndexedDB-backed `AttachmentStore` — resumes, cover letters, screenshots.
  *
+ * Inert until Part 5: the seam and the self-test round-trip exist so Part 5 does
+ * not invent persistence. Nothing in the UI calls this yet. Files are keyed by
+ * application id; `purge()` cascades via `removeAllFor(applicationId)` only.
+ *
  * This is why the plan puts files here rather than in localStorage: localStorage is a
  * string API, so a 5 MB PDF would cost ~6.7 MB of base64 inside the JSON document that
  * every other read has to parse.

@@ -33,10 +33,13 @@ or Cloudflare Pages.
 | Files (CVs, screenshots) | `IndexedDB` | db `jat-files`, store `attachments` |
 
 Records are one JSON document `{ version, savedAt, records: [...] }`. Files are stored as
-bytes in IndexedDB because `localStorage` is a string API and cannot hold a PDF.
+bytes in IndexedDB because `localStorage` is a string API and cannot hold a PDF. The
+IndexedDB store exists now but stays **inert until Part 5**; files are keyed by
+application id, not by an `attachmentIds` field on the record.
 
-- **Archive and delete are different things.** Deleting is soft, so undo works; archived
-  rows leave the board but stay restorable.
+- **Archive and delete are different things.** `isArchived` hides a row from the board
+  but keeps it restorable. `deletedAt` is the undo window between "Delete" and Part 9's
+  "Delete permanently". Files cascade only on permanent delete.
 - **Corrupt data is never destroyed.** An unreadable document is copied to
   `jat.applications.v1.corrupt` and the app starts empty instead of throwing.
 - To wipe everything: DevTools → Application → clear site data.
@@ -45,7 +48,8 @@ bytes in IndexedDB because `localStorage` is a string API and cannot hold a PDF.
 
 ```
 src/lib/
-  types.ts        ApplicationRecord — the one data shape the whole app shares
+  types.ts        JobApplication — the one data shape the whole app shares
+  applications.ts getAllApplications / saveApplication / deleteApplication
   pipeline.ts     stage order, terminal stages, follow-up-due rule, week math
   normalize.ts    every read/write passes through here; junk input cannot reach a view
   query.ts        filter/sort/aggregate as pure functions
@@ -53,14 +57,17 @@ src/lib/
   storage/
     adapter.ts            RecordStore + AttachmentStore interfaces   ← the seam
     localRecordStore.ts   localStorage implementation
-    idbAttachmentStore.ts IndexedDB implementation
+    idbAttachmentStore.ts IndexedDB implementation (inert until Part 5)
     index.ts              getStorage() — the only place either is chosen
 ```
 
 **Nothing in the UI touches `localStorage` or `indexedDB` directly.** Components call
 `getStorage()`. That is what makes the backend optional rather than a rewrite: a REST +
 SQLite implementation of the same two interfaces can be swapped in behind
-`VITE_STORAGE_DRIVER=rest` without touching a component. See `PLAN.md` §E.
+`VITE_STORAGE_DRIVER=rest` without touching a component. See `PLAN.md`.
+
+Named Part 1 helpers (`getAllApplications`, `saveApplication`, `deleteApplication`) are
+thin wrappers over that seam.
 
 `src/lib/selfTest.ts` runs 12 checks against the real storage stack in the browser —
 CRUD, undo-delete, archive, bulk edits, concurrent writes, corrupt-data recovery and a
@@ -75,6 +82,8 @@ state, and it lives behind the storage adapter.
 
 ## Status
 
-Part 1 of 12 — foundation. The data model, pipeline rules, storage layer, tests and
-verification harness exist; the CRUD screens, board, dashboard and export are the
-following parts. Progress and the part-by-part plan are in [`PLAN.md`](PLAN.md).
+Part 1 of 12 — foundation, with field names reconciled to the plan. The data model,
+pipeline rules, storage layer, tests and verification harness exist; the CRUD screens,
+board, dashboard and export are the following parts. The spec is
+[`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
+progress and locked decisions are in [`PLAN.md`](PLAN.md).

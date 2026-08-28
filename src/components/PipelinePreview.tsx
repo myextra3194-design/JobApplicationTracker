@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { PIPELINE, STATUS_TONE } from '../lib/pipeline';
 import { summarise, type PipelineCounts } from '../lib/query';
 import { getStorage } from '../lib/storage';
-import { STATUSES, type ApplicationRecord } from '../lib/types';
+import { STATUSES, type JobApplication } from '../lib/types';
 
 /**
  * Read-only preview of the 7-stage board, populated from the real store.
@@ -11,7 +11,7 @@ import { STATUSES, type ApplicationRecord } from '../lib/types';
  * layer before any interaction is built on top of them.
  */
 export function PipelinePreview() {
-  const [records, setRecords] = useState<ApplicationRecord[]>([]);
+  const [records, setRecords] = useState<JobApplication[]>([]);
 
   useEffect(() => {
     let cancelled = false;

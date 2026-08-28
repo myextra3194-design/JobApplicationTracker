@@ -24,7 +24,7 @@ export default function App() {
       ]);
       setCounts({
         total: live.length,
-        archived: archived.filter((r) => r.archivedAt).length,
+        archived: archived.filter((r) => r.isArchived).length,
         deleted: deleted.filter((r) => r.deletedAt).length,
       });
       setLoadError(null);

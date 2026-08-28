@@ -8,7 +8,7 @@ import type { AttachmentStore, RecordStore, TrackerStorage } from './adapter';
  * concrete class, and never `localStorage` themselves.
  *
  * Swapping in the backend later is one new class pair plus `VITE_STORAGE_DRIVER=rest`
- * — see PLAN.md §E "Optional Later Upgrade".
+ * — see PLAN.md "Optional Later Upgrade".
  */
 
 let cache: TrackerStorage | null = null;
@@ -21,7 +21,7 @@ function resolveDriver(): StorageDriver {
 function buildRest(): never {
   throw new Error(
     'VITE_STORAGE_DRIVER=rest was requested, but the REST/SQLite adapter is the "Optional Later ' +
-      'Upgrade" in PLAN.md §E and is not implemented in the client-only build. Unset the variable to ' +
+      'Upgrade" in PLAN.md and is not implemented in the client-only build. Unset the variable to ' +
       'use local storage.',
   );
 }
@@ -40,12 +40,9 @@ export function getStorage(): TrackerStorage {
     records,
     attachments,
     async purge(id: string): Promise<void> {
-      // Cascade here rather than in either store: the record store knows the ids,
-      // the attachment store knows the files, and only this facade knows both.
-      const record = await records.get(id);
-      if (record) {
-        for (const attachmentId of record.attachmentIds) await attachments.remove(attachmentId);
-      }
+      // Files are keyed by application id (Part 5). Cascade only on permanent delete.
+      // The IndexedDB store is inert until then; calling removeAllFor is still the
+      // one path so Part 5 cannot grow a second cascade.
       await attachments.removeAllFor(id);
       await records.replaceAll((await records.all()).filter((r) => r.id !== id));
     },

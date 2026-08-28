@@ -1,11 +1,11 @@
-import type { ApplicationRecord, ApplicationPatch, NewApplication, StorageDriver } from '../types';
+import type { JobApplication, JobApplicationPatch, NewJobApplication, StorageDriver } from '../types';
 import type { ApplicationQuery } from '../query';
 
 /**
  * THE SEAM. Nothing in the UI touches localStorage or IndexedDB directly; it goes
  * through these two interfaces. That is the whole backend-readiness promise from
  * the plan: swap these implementations for `fetch()`-based ones and the components
- * keep working (PLAN.md §E).
+ * keep working (PLAN.md, Optional Later Upgrade).
  */
 
 export class NotFoundError extends Error {
@@ -25,21 +25,21 @@ export class StorageFullError extends Error {
 export interface RecordStore {
   readonly driver: StorageDriver;
   /** Filtered, sorted, archived/deleted hidden unless requested. */
-  list(query?: ApplicationQuery): Promise<ApplicationRecord[]>;
+  list(query?: ApplicationQuery): Promise<JobApplication[]>;
   /** Everything, unfiltered, in insertion order. Used by export/import and the dashboard. */
-  all(): Promise<ApplicationRecord[]>;
-  get(id: string): Promise<ApplicationRecord | null>;
-  create(input?: NewApplication): Promise<ApplicationRecord>;
+  all(): Promise<JobApplication[]>;
+  get(id: string): Promise<JobApplication | null>;
+  create(input?: NewJobApplication): Promise<JobApplication>;
   /** Rejects with NotFoundError. Timestamps `updatedAt`. */
-  update(id: string, patch: ApplicationPatch): Promise<ApplicationRecord>;
+  update(id: string, patch: JobApplicationPatch): Promise<JobApplication>;
   /** Soft delete — undo-delete lives here, not in `purge`. */
   remove(id: string): Promise<void>;
   restore(id: string): Promise<void>;
-  setArchived(id: string, archived: boolean): Promise<ApplicationRecord>;
-  bulkPatch(ids: readonly string[], patch: ApplicationPatch): Promise<ApplicationRecord[]>;
+  setArchived(id: string, archived: boolean): Promise<JobApplication>;
+  bulkPatch(ids: readonly string[], patch: JobApplicationPatch): Promise<JobApplication[]>;
   bulkRemove(ids: readonly string[]): Promise<number>;
-  /** Replace the whole collection (restore from backup / CSV import). */
-  replaceAll(records: readonly ApplicationRecord[]): Promise<ApplicationRecord[]>;
+  /** Replace the whole collection (restore from backup). */
+  replaceAll(records: readonly JobApplication[]): Promise<JobApplication[]>;
 }
 
 export interface AttachmentMeta {
@@ -62,8 +62,9 @@ export interface NewAttachment {
 }
 
 /**
- * Files never go through `RecordStore` — localStorage cannot hold a Blob. Attachments
- * live in IndexedDB and the record only stores their ids.
+ * Files never go through `RecordStore` — localStorage cannot hold a Blob.
+ * Attachments live in IndexedDB, keyed by application id (Part 5). This store
+ * exists now so the seam and the self-test are real; it stays inert until Part 5.
  */
 export interface AttachmentStore {
   readonly driver: StorageDriver;

@@ -1,5 +1,5 @@
-import type { ApplicationRecord, ApplicationPatch, ApplicationStatus, FinalResult, InterviewStatus, NewApplication } from './types';
-import { FINAL_RESULTS, INTERVIEW_STATUSES, STATUSES } from './types';
+import type { ApplicationStatus, JobApplication, JobApplicationPatch, NewJobApplication } from './types';
+import { STATUSES } from './types';
 
 /**
  * Every value that comes out of storage passes through here. localStorage is
@@ -9,7 +9,6 @@ import { FINAL_RESULTS, INTERVIEW_STATUSES, STATUSES } from './types';
 
 export const SCHEMA_VERSION = 1;
 export const STORAGE_KEY = 'jat.applications.v1';
-export const SETTINGS_KEY = 'jat.settings.v1';
 
 function str(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
@@ -42,6 +41,10 @@ function intInRange(value: unknown, min: number, max: number): number | null {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+function bool(value: unknown, fallback = false): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
 function url(value: unknown): string {
   const raw = str(value).trim();
   if (!raw) return '';
@@ -65,16 +68,16 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function emptyApplication(input: NewApplication = {}): ApplicationRecord {
+export function emptyJobApplication(input: NewJobApplication = {}): JobApplication {
   const stamp = nowIso();
   return {
     id: str(input.id) || newId(),
     createdAt: str(input.createdAt) || stamp,
     updatedAt: str(input.updatedAt) || stamp,
-    archivedAt: input.archivedAt ?? null,
     deletedAt: input.deletedAt ?? null,
+    isArchived: bool(input.isArchived, false),
 
-    company: str(input.company).trim(),
+    companyName: str(input.companyName).trim(),
     jobTitle: str(input.jobTitle).trim(),
     jobLocation: str(input.jobLocation).trim(),
     applicationDate: isoDate(input.applicationDate),
@@ -84,14 +87,13 @@ export function emptyApplication(input: NewApplication = {}): ApplicationRecord 
     recruiterContact: str(input.recruiterContact).trim(),
     followUpDate: isoDate(input.followUpDate),
     interviewDate: isoDate(input.interviewDate),
-    interviewStatus: oneOf<InterviewStatus>(input.interviewStatus, INTERVIEW_STATUSES, 'Not scheduled'),
+    interviewStatus: str(input.interviewStatus).trim() || 'Not scheduled',
     salary: str(input.salary).trim(),
-    jobPostingUrl: url(input.jobPostingUrl),
+    jobLink: url(input.jobLink),
     notes: str(input.notes).trim(),
-    companyResearchNotes: str(input.companyResearchNotes).trim(),
+    companyResearch: str(input.companyResearch).trim(),
     tags: trimmedStrings(input.tags),
-    attachmentIds: trimmedStrings(input.attachmentIds),
-    finalResult: oneOf<FinalResult>(input.finalResult, FINAL_RESULTS, 'Pending'),
+    finalResult: str(input.finalResult).trim() || 'Pending',
 
     matchScore: intInRange(input.matchScore, 0, 100),
     cvVersionUsed: str(input.cvVersionUsed).trim() || null,
@@ -99,17 +101,17 @@ export function emptyApplication(input: NewApplication = {}): ApplicationRecord 
 }
 
 /** Unknown input -> a valid record. Returns null only for non-objects. */
-export function normalizeApplication(raw: unknown): ApplicationRecord | null {
+export function normalizeJobApplication(raw: unknown): JobApplication | null {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
-  return emptyApplication(raw as NewApplication);
+  return emptyJobApplication(raw as NewJobApplication);
 }
 
-export function normalizeApplicationList(raw: unknown): ApplicationRecord[] {
+export function normalizeJobApplicationList(raw: unknown): JobApplication[] {
   if (!Array.isArray(raw)) return [];
-  const out: ApplicationRecord[] = [];
+  const out: JobApplication[] = [];
   const seen = new Set<string>();
   for (const item of raw) {
-    const record = normalizeApplication(item);
+    const record = normalizeJobApplication(item);
     // Deduplicate ids: two rows sharing an id would corrupt every update.
     if (record && !seen.has(record.id)) {
       seen.add(record.id);
@@ -120,6 +122,6 @@ export function normalizeApplicationList(raw: unknown): ApplicationRecord[] {
 }
 
 /** Merge a patch onto a record, keeping the normalisation rules authoritative. */
-export function mergeApplication(base: ApplicationRecord, patch: ApplicationPatch): ApplicationRecord {
-  return emptyApplication({ ...base, ...patch, id: base.id, createdAt: base.createdAt });
+export function mergeJobApplication(base: JobApplication, patch: JobApplicationPatch): JobApplication {
+  return emptyJobApplication({ ...base, ...patch, id: base.id, createdAt: base.createdAt });
 }

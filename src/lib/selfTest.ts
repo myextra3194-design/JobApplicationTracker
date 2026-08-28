@@ -1,4 +1,4 @@
-import { emptyApplication, normalizeApplication } from './normalize';
+import { emptyJobApplication, normalizeJobApplication } from './normalize';
 import { blobToArrayBuffer } from './blob';
 import { isFollowUpDue, toPlainDate, weekKeyOf } from './pipeline';
 import { IdbAttachmentStore } from './storage/idbAttachmentStore';
@@ -66,17 +66,23 @@ export async function runSelfTests(): Promise<CheckResult[]> {
 
   const checks: Promise<CheckResult>[] = [
     runCheck('create + read back', async (store) => {
-      const created = await store.create({ company: `Sample Power & Water ${SAMPLE}`, jobTitle: 'Substation Engineer' });
+      const created = await store.create({
+        companyName: `Sample Power & Water ${SAMPLE}`,
+        jobTitle: 'Substation Engineer',
+      });
       const read = await store.get(created.id);
-      assert(read?.company === created.company, 'read-back company differs from the created company');
+      assert(read?.companyName === created.companyName, 'read-back companyName differs from the created companyName');
       assert(read?.status === 'Saved', `new records must default to Saved, got ${read?.status}`);
+      assert(read?.interviewStatus === 'Not scheduled', `interviewStatus default, got ${read?.interviewStatus}`);
+      assert(read?.finalResult === 'Pending', `finalResult default, got ${read?.finalResult}`);
+      assert(read?.isArchived === false, 'new records must default isArchived to false');
       assert(read?.createdAt === created.createdAt, 'createdAt was rewritten on read');
       assert(created.id.length > 8, 'id looks too short to be a uuid');
-      return `wrote and re-read "${read?.company}"`;
+      return `wrote and re-read "${read?.companyName}"`;
     }),
 
     runCheck('update re-stamps updatedAt', async (store) => {
-      const created = await store.create({ company: `Sample Update Co ${SAMPLE}` });
+      const created = await store.create({ companyName: `Sample Update Co ${SAMPLE}` });
       const before = created.updatedAt;
       await new Promise((resolve) => setTimeout(resolve, 3));
       const updated = await store.update(created.id, { status: 'Applied', applicationDate: todayIso() });
@@ -100,30 +106,42 @@ export async function runSelfTests(): Promise<CheckResult[]> {
     }),
 
     runCheck('soft delete hides, restore brings back', async (store) => {
-      const created = await store.create({ company: `Sample Delete Co ${SAMPLE}` });
+      const created = await store.create({ companyName: `Sample Delete Co ${SAMPLE}` });
       await store.remove(created.id);
       assert(!(await store.list()).some((r) => r.id === created.id), 'deleted record still visible in the default list');
-      assert((await store.list({ includeDeleted: true })).some((r) => r.id === created.id), 'record vanished entirely — undo-delete impossible');
+      assert(
+        (await store.list({ includeDeleted: true })).some((r) => r.id === created.id),
+        'record vanished entirely — undo-delete impossible',
+      );
       await store.restore(created.id);
       assert((await store.list()).some((r) => r.id === created.id), 'restore did not bring the record back');
       return 'undo-delete works in both directions, row never leaves the document';
     }),
 
     runCheck('archive is separate from delete', async (store) => {
-      const created = await store.create({ company: `Sample Archive Co ${SAMPLE}` });
-      await store.setArchived(created.id, true);
+      const created = await store.create({ companyName: `Sample Archive Co ${SAMPLE}` });
+      const archived = await store.setArchived(created.id, true);
+      assert(archived.isArchived === true, 'setArchived(id, true) must set isArchived boolean, not a timestamp');
       assert(!(await store.list()).some((r) => r.id === created.id), 'archived record leaked into the board');
-      assert((await store.list({ includeArchived: true })).some((r) => r.id === created.id), 'archived record missing from archive view');
-      assert(!(await store.list({ includeDeleted: true })).some((r) => r.id === created.id), 'archived must not appear as deleted');
+      assert(
+        (await store.list({ includeArchived: true })).some((r) => r.id === created.id),
+        'archived record missing from archive view',
+      );
+      assert(
+        !(await store.list({ includeDeleted: true })).some((r) => r.id === created.id),
+        'archived must not appear as deleted',
+      );
       await store.setArchived(created.id, false);
+      const restored = await store.get(created.id);
+      assert(restored?.isArchived === false, 'unarchive must set isArchived false');
       assert((await store.list()).some((r) => r.id === created.id), 'unarchive failed');
       return 'archived rows stay restorable and out of the default view';
     }),
 
     runCheck('bulk patch hits only the selection', async (store) => {
-      const a = await store.create({ company: `Bulk A ${SAMPLE}` });
-      const b = await store.create({ company: `Bulk B ${SAMPLE}` });
-      const c = await store.create({ company: `Bulk C ${SAMPLE}` });
+      const a = await store.create({ companyName: `Bulk A ${SAMPLE}` });
+      const b = await store.create({ companyName: `Bulk B ${SAMPLE}` });
+      const c = await store.create({ companyName: `Bulk C ${SAMPLE}` });
       const touched = await store.bulkPatch([a.id, b.id], { status: 'Withdrawn' });
       assert(touched.length === 2, `expected 2 touched, got ${touched.length}`);
       assert((await store.get(c.id))?.status === 'Saved', 'bulk patch modified an unselected record');
@@ -134,9 +152,21 @@ export async function runSelfTests(): Promise<CheckResult[]> {
 
     runCheck('filters: status, search, tag, due follow-up', async (store) => {
       await store.replaceAll([
-        emptyApplication({ id: 'f1', company: 'Alpha Utilities', status: 'Interview', followUpDate: todayIso(), interviewDate: todayIso() }),
-        emptyApplication({ id: 'f2', company: 'Beta Grid', status: 'Rejected' }),
-        emptyApplication({ id: 'f3', company: 'Gamma Energy', status: 'Applied', tags: ['qatar'], followUpDate: '2099-01-01' }),
+        emptyJobApplication({
+          id: 'f1',
+          companyName: 'Alpha Utilities',
+          status: 'Interview',
+          followUpDate: todayIso(),
+          interviewDate: todayIso(),
+        }),
+        emptyJobApplication({ id: 'f2', companyName: 'Beta Grid', status: 'Rejected' }),
+        emptyJobApplication({
+          id: 'f3',
+          companyName: 'Gamma Energy',
+          status: 'Applied',
+          tags: ['qatar'],
+          followUpDate: '2099-01-01',
+        }),
       ]);
       const interviews = await store.list({ statuses: ['Interview'] });
       assert(interviews.length === 1 && interviews[0]?.id === 'f1', 'status filter returned the wrong set');
@@ -152,16 +182,37 @@ export async function runSelfTests(): Promise<CheckResult[]> {
     }),
 
     runCheck('normaliser defends against garbage input', () => {
-      const bad: ReturnType<typeof normalizeApplication> = normalizeApplication({ company: 42, status: 'Hired', tags: ['qatar', '', '  ', 7, 'doha'], applicationDate: '15/08/2026', matchScore: 999, followUpDate: 'yesterday' });
+      const bad: ReturnType<typeof normalizeJobApplication> = normalizeJobApplication({
+        companyName: 42,
+        status: 'Hired',
+        tags: ['qatar', '', '  ', 7, 'doha'],
+        applicationDate: '15/08/2026',
+        matchScore: 999,
+        followUpDate: 'yesterday',
+        interviewStatus: '',
+        finalResult: '',
+      });
       assert(bad !== null, 'normaliser returned null for an object input');
       const record = bad as Exclude<typeof bad, null>;
-      assert(record.company === '', 'non-string company must coerce to empty, not "42"');
+      assert(record.companyName === '', 'non-string companyName must coerce to empty, not "42"');
       assert(record.status === 'Saved', `unknown status must fall back to Saved, got ${record.status}`);
       assert(record.tags.join(',') === 'qatar,doha', `tags must trim and drop junk, got ${JSON.stringify(record.tags)}`);
       assert(record.applicationDate === null, 'non-ISO date must become null');
       assert(record.followUpDate === null, 'textual date must become null');
       assert(record.matchScore === 100, 'match score must clamp to 0-100');
-      assert(normalizeApplication('a string') === null && normalizeApplication(null) === null, 'non-objects must be rejected, not coerced');
+      assert(record.interviewStatus === 'Not scheduled', 'empty interviewStatus defaults to Not scheduled');
+      assert(record.finalResult === 'Pending', 'empty finalResult defaults to Pending');
+      assert(record.isArchived === false, 'missing isArchived defaults to false');
+      const custom = normalizeJobApplication({
+        interviewStatus: 'Panel round 2',
+        finalResult: 'Waiting on offer',
+      });
+      assert(custom?.interviewStatus === 'Panel round 2', 'free-text interviewStatus must be kept');
+      assert(custom?.finalResult === 'Waiting on offer', 'free-text finalResult must be kept');
+      assert(
+        normalizeJobApplication('a string') === null && normalizeJobApplication(null) === null,
+        'non-objects must be rejected, not coerced',
+      );
       return 'bad types, bad dates, junk tags and out-of-range scores all sanitised';
     }),
 
@@ -175,15 +226,21 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       assert(backup === junk, 'corrupt payload was not preserved byte-for-byte for recovery');
       // A second failed read must not pile up duplicates.
       await store.all();
-      assert(globalThis.localStorage.getItem(corruptKeyFor(store.storageKey)) === junk, 'quarantine must not be overwritten or duplicated');
+      assert(
+        globalThis.localStorage.getItem(corruptKeyFor(store.storageKey)) === junk,
+        'quarantine must not be overwritten or duplicated',
+      );
       return 'original bytes preserved byte-for-byte in one fixed .corrupt key, no duplicates on repeat reads';
     }),
 
     runCheck('parallel writes do not lose records', async (store) => {
-      await Promise.all(Array.from({ length: 12 }, (_unused, i) => store.create({ company: `Race ${i} ${SAMPLE}` })));
+      await Promise.all(Array.from({ length: 12 }, (_unused, i) => store.create({ companyName: `Race ${i} ${SAMPLE}` })));
       const count = (await store.all()).length;
       assert(count === 12, `12 concurrent creates wrote ${count} records — lost update in the store`);
-      await Promise.all([store.update('nope', { status: 'Offer' }).catch(() => undefined), store.create({ company: `Mixed ${SAMPLE}` })]);
+      await Promise.all([
+        store.update('nope', { status: 'Offer' }).catch(() => undefined),
+        store.create({ companyName: `Mixed ${SAMPLE}` }),
+      ]);
       assert((await store.all()).length === 13, 'a failing write must not corrupt the queue for later writes');
       return '12 concurrent writes all survived; a rejected write did not wedge the queue';
     }),
@@ -200,7 +257,10 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       assert(fetched !== null, 'blob vanished after put()');
       const roundTripped = new Uint8Array(await blobToArrayBuffer((fetched as Exclude<typeof fetched, null>).blob));
       assert(roundTripped.length === bytes.length, `byte length changed: ${bytes.length} → ${roundTripped.length}`);
-      assert(roundTripped.every((byte, i) => byte === bytes[i]), 'blob bytes were corrupted in transit');
+      assert(
+        roundTripped.every((byte, i) => byte === bytes[i]),
+        'blob bytes were corrupted in transit',
+      );
       assert(meta.mimeType === 'application/pdf', 'mime type not recorded');
       const listed = await attachments.listFor(attachmentAppId);
       assert(listed.length === 1 && listed[0]?.name === 'CV_SAMPLE.pdf', 'listFor index lookup failed');
