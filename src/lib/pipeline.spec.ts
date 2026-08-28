@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { emptyApplication } from './normalize';
-import { daysFromToday, isFollowUpDue, isTerminal, toPlainDate, weekKeyOf } from './pipeline';
+import { emptyJobApplication } from './normalize';
+import { daysFromToday, isFollowUpDue, isLive, isTerminal, toPlainDate, weekKeyOf } from './pipeline';
 import { isSameWeek } from './pipeline';
 
 /** Fixed local reference date: Sat 29 Aug 2026. */
@@ -43,26 +43,38 @@ describe('status rules', () => {
   });
 
   it('follow-up is due today or earlier, only while in progress', () => {
-    const overdue = emptyApplication({ status: 'Applied', followUpDate: '2026-08-20' });
+    const overdue = emptyJobApplication({ status: 'Applied', followUpDate: '2026-08-20' });
     expect(isFollowUpDue(overdue, TODAY)).toBe(true);
 
-    const future = emptyApplication({ status: 'Applied', followUpDate: '2026-09-10' });
+    const future = emptyJobApplication({ status: 'Applied', followUpDate: '2026-09-10' });
     expect(isFollowUpDue(future, TODAY)).toBe(false);
 
-    const noDate = emptyApplication({ status: 'Applied' });
+    const noDate = emptyJobApplication({ status: 'Applied' });
     expect(isFollowUpDue(noDate, TODAY)).toBe(false);
 
-    const rejected = emptyApplication({ status: 'Rejected', followUpDate: '2026-08-20' });
+    const rejected = emptyJobApplication({ status: 'Rejected', followUpDate: '2026-08-20' });
     expect(isFollowUpDue(rejected, TODAY)).toBe(false);
 
-    const saved = emptyApplication({ status: 'Saved', followUpDate: '2026-08-20' });
+    const saved = emptyJobApplication({ status: 'Saved', followUpDate: '2026-08-20' });
     expect(isFollowUpDue(saved, TODAY)).toBe(false);
 
     // An offer still outstanding is worth chasing; an archived one is not.
-    const offer = emptyApplication({ status: 'Offer', followUpDate: '2026-08-20' });
+    const offer = emptyJobApplication({ status: 'Offer', followUpDate: '2026-08-20' });
     expect(isFollowUpDue(offer, TODAY)).toBe(false);
 
-    const archived = emptyApplication({ status: 'Interview', followUpDate: '2026-08-20', archivedAt: '2026-08-21T00:00:00.000Z' });
+    const archived = emptyJobApplication({
+      status: 'Interview',
+      followUpDate: '2026-08-20',
+      isArchived: true,
+    });
+    expect(isLive(archived)).toBe(false);
     expect(isFollowUpDue(archived, TODAY)).toBe(false);
+
+    const deleted = emptyJobApplication({
+      status: 'Interview',
+      followUpDate: '2026-08-20',
+      deletedAt: '2026-08-21T00:00:00.000Z',
+    });
+    expect(isLive(deleted)).toBe(false);
   });
 });

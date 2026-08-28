@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { emptyApplication } from './normalize';
+import { emptyJobApplication } from './normalize';
 import { applyQuery, collectTags, sortRecords, summarise } from './query';
-import type { ApplicationRecord } from './types';
+import type { JobApplication } from './types';
 
 /** Sat 29 Aug 2026; that Monday (24th) starts the current week. */
 const TODAY = new Date(2026, 7, 29);
 
-const rec = (over: Parameters<typeof emptyApplication>[0]): ApplicationRecord => emptyApplication(over);
+const rec = (over: Parameters<typeof emptyJobApplication>[0]): JobApplication => emptyJobApplication(over);
 
-const FIXTURES: ApplicationRecord[] = [
+const FIXTURES: JobApplication[] = [
   rec({
     id: 'a',
-    company: 'Alpha Utilities',
+    companyName: 'Alpha Utilities',
     status: 'Interview',
     applicationDate: '2026-08-24',
     interviewDate: '2026-08-28',
@@ -19,17 +19,24 @@ const FIXTURES: ApplicationRecord[] = [
     tags: ['Qatar', 'utility'],
     matchScore: 82,
   }),
-  rec({ id: 'b', company: 'beta grid', status: 'Applied', applicationDate: '2026-08-26', notes: 'referral from H.', tags: ['qatar'] }),
-  rec({ id: 'c', company: 'Gamma Energy', status: 'Rejected', applicationDate: '2026-08-10', finalResult: 'Rejected' }),
+  rec({
+    id: 'b',
+    companyName: 'beta grid',
+    status: 'Applied',
+    applicationDate: '2026-08-26',
+    notes: 'referral from H.',
+    tags: ['qatar'],
+  }),
+  rec({ id: 'c', companyName: 'Gamma Energy', status: 'Rejected', applicationDate: '2026-08-10', finalResult: 'Rejected' }),
   // 'd' deliberately has no applicationDate: an Offer recorded after the fact.
-  rec({ id: 'd', company: 'Delta Power', status: 'Offer', salary: '7000 QAR' }),
-  rec({ id: 'e', company: 'Epsilon KEIC', status: 'Saved', archivedAt: '2026-08-21T00:00:00.000Z' }),
-  rec({ id: 'f', company: 'Zeta Rejected', status: 'Rejected', deletedAt: '2026-08-22T00:00:00.000Z' }),
+  rec({ id: 'd', companyName: 'Delta Power', status: 'Offer', salary: '7000 QAR' }),
+  rec({ id: 'e', companyName: 'Epsilon KEIC', status: 'Saved', isArchived: true }),
+  rec({ id: 'f', companyName: 'Zeta Rejected', status: 'Rejected', deletedAt: '2026-08-22T00:00:00.000Z' }),
 ];
 
 const LIVE_IDS = ['a', 'b', 'c', 'd'];
 
-function pick(id: string): ApplicationRecord {
+function pick(id: string): JobApplication {
   const found = FIXTURES.find((r) => r.id === id);
   if (!found) throw new Error(`missing fixture ${id}`);
   return found;
@@ -37,7 +44,11 @@ function pick(id: string): ApplicationRecord {
 
 describe('applyQuery', () => {
   it('hides archived and deleted rows by default', () => {
-    expect(applyQuery(FIXTURES).map((r) => r.id).sort()).toEqual(LIVE_IDS);
+    expect(
+      applyQuery(FIXTURES)
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(LIVE_IDS);
   });
 
   it('shows them only when explicitly asked', () => {
@@ -49,7 +60,11 @@ describe('applyQuery', () => {
   });
 
   it('filters by status set', () => {
-    expect(applyQuery(FIXTURES, { statuses: ['Applied', 'Offer'] }).map((r) => r.id).sort()).toEqual(['b', 'd']);
+    expect(
+      applyQuery(FIXTURES, { statuses: ['Applied', 'Offer'] })
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(['b', 'd']);
   });
 
   it('treats an empty status array as "no filter"', () => {
@@ -64,7 +79,11 @@ describe('applyQuery', () => {
   });
 
   it('matches tags case-insensitively regardless of how they were typed', () => {
-    expect(applyQuery(FIXTURES, { tag: 'QATAR' }).map((r) => r.id).sort()).toEqual(['a', 'b']);
+    expect(
+      applyQuery(FIXTURES, { tag: 'QATAR' })
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(['a', 'b']);
     expect(applyQuery(FIXTURES, { tag: 'utility' }).map((r) => r.id)).toEqual(['a']);
     // Archived rows keep their tags out of the default view.
     expect(applyQuery(FIXTURES, { tag: 'qatar', includeArchived: true }).length).toBe(2);
@@ -74,10 +93,10 @@ describe('applyQuery', () => {
     expect(applyQuery(FIXTURES, { followUpDue: true }).map((r) => r.id)).toEqual(['a']);
   });
 
-  it('sorts by company case-insensitively', () => {
-    const asc = applyQuery(FIXTURES, { sortBy: 'company', sortDir: 'asc' }).map((r) => r.company);
+  it('sorts by companyName case-insensitively', () => {
+    const asc = applyQuery(FIXTURES, { sortBy: 'companyName', sortDir: 'asc' }).map((r) => r.companyName);
     expect(asc).toEqual(['Alpha Utilities', 'beta grid', 'Delta Power', 'Gamma Energy']);
-    expect(applyQuery(FIXTURES, { sortBy: 'company', sortDir: 'desc' }).map((r) => r.id)).toEqual([
+    expect(applyQuery(FIXTURES, { sortBy: 'companyName', sortDir: 'desc' }).map((r) => r.id)).toEqual([
       'c',
       'd',
       'b',
@@ -96,7 +115,7 @@ describe('applyQuery', () => {
 describe('sortRecords', () => {
   it('does not mutate the input array', () => {
     const snapshot = FIXTURES.map((r) => r.id);
-    sortRecords(FIXTURES, 'company', 'asc');
+    sortRecords(FIXTURES, 'companyName', 'asc');
     expect(FIXTURES.map((r) => r.id)).toEqual(snapshot);
   });
 
@@ -150,12 +169,17 @@ describe('collectTags', () => {
   });
 
   it('ignores deleted records but not archived ones', () => {
-    const withDeleted = [...FIXTURES, rec({ id: 'z', company: 'Z', tags: ['nope'], deletedAt: '2026-08-22T00:00:00.000Z' })];
+    const withDeleted = [
+      ...FIXTURES,
+      rec({ id: 'z', companyName: 'Z', tags: ['nope'], deletedAt: '2026-08-22T00:00:00.000Z' }),
+    ];
     expect(collectTags(withDeleted).some((t) => t.tag === 'nope')).toBe(false);
     expect(collectTags(FIXTURES).length).toBe(2);
   });
 
   it('drops blanks and trims padding', () => {
-    expect(collectTags([rec({ id: 'x', company: 'X', tags: ['', '   ', '  qatar  ' ] })])).toEqual([{ tag: 'qatar', count: 1 }]);
+    expect(collectTags([rec({ id: 'x', companyName: 'X', tags: ['', '   ', '  qatar  '] })])).toEqual([
+      { tag: 'qatar', count: 1 },
+    ]);
   });
 });

@@ -1,5 +1,5 @@
-import type { ApplicationRecord, ApplicationStatus } from './types';
-import { isFollowUpDue, weekKeyOf, toPlainDate } from './pipeline';
+import type { ApplicationStatus, JobApplication } from './types';
+import { isFollowUpDue, toPlainDate, weekKeyOf } from './pipeline';
 import { STATUSES } from './types';
 
 /**
@@ -8,7 +8,13 @@ import { STATUSES } from './types';
  * `this`, no DOM) means they are unit-testable and reusable on a server later.
  */
 
-export type SortKey = 'updatedAt' | 'company' | 'status' | 'applicationDate' | 'followUpDate' | 'matchScore';
+export type SortKey =
+  | 'updatedAt'
+  | 'companyName'
+  | 'status'
+  | 'applicationDate'
+  | 'followUpDate'
+  | 'matchScore';
 export type SortDir = 'asc' | 'desc';
 
 export interface ApplicationQuery {
@@ -29,7 +35,7 @@ const DEFAULTS = {
   sortDir: 'desc' as SortDir,
 };
 
-export function applyQuery(records: ApplicationRecord[], query: ApplicationQuery = {}): ApplicationRecord[] {
+export function applyQuery(records: JobApplication[], query: ApplicationQuery = {}): JobApplication[] {
   const q = { ...DEFAULTS, ...query };
   const needle = q.search?.trim().toLowerCase() ?? '';
   const statuses = q.statuses?.length ? new Set(q.statuses) : null;
@@ -37,7 +43,7 @@ export function applyQuery(records: ApplicationRecord[], query: ApplicationQuery
 
   const filtered = records.filter((r) => {
     if (r.deletedAt) return q.includeDeleted;
-    if (r.archivedAt && !q.includeArchived) return false;
+    if (r.isArchived && !q.includeArchived) return false;
     if (statuses && !statuses.has(r.status)) return false;
     if (q.followUpDue && !isFollowUpDue(r)) return false;
     if (tag && !r.tags.some((t) => t.toLowerCase() === tag)) return false;
@@ -49,16 +55,16 @@ export function applyQuery(records: ApplicationRecord[], query: ApplicationQuery
 }
 
 /** Fields a free-text search looks at. Deliberately excludes internal ids. */
-export function searchableText(r: ApplicationRecord): string {
+export function searchableText(r: JobApplication): string {
   return [
-    r.company,
+    r.companyName,
     r.jobTitle,
     r.jobLocation,
     r.jobPortal,
     r.recruiterName,
     r.recruiterContact,
     r.notes,
-    r.companyResearchNotes,
+    r.companyResearch,
     r.salary,
     ...r.tags,
   ]
@@ -66,12 +72,12 @@ export function searchableText(r: ApplicationRecord): string {
     .toLowerCase();
 }
 
-export function sortRecords(records: ApplicationRecord[], key: SortKey, dir: SortDir): ApplicationRecord[] {
+export function sortRecords(records: JobApplication[], key: SortKey, dir: SortDir): JobApplication[] {
   const factor = dir === 'asc' ? 1 : -1;
   return [...records].sort((a, b) => {
     switch (key) {
-      case 'company':
-        return factor * a.company.localeCompare(b.company, undefined, { sensitivity: 'base' });
+      case 'companyName':
+        return factor * a.companyName.localeCompare(b.companyName, undefined, { sensitivity: 'base' });
       case 'status':
         return factor * a.status.localeCompare(b.status);
       case 'matchScore':
@@ -103,8 +109,8 @@ export interface PipelineCounts {
   responseRatePct: number;
 }
 
-/** Dashboard aggregates. Same definition as legacy `tracker.py stats()` so numbers reconcile. */
-export function summarise(records: ApplicationRecord[], today: Date = new Date()): PipelineCounts {
+/** Dashboard aggregates. */
+export function summarise(records: JobApplication[], today: Date = new Date()): PipelineCounts {
   const byStatus = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<ApplicationStatus, number>;
   const thisWeek = weekKeyOf(toPlainDate(today));
   const PROGRESSION = new Set<ApplicationStatus>(['Shortlisted', 'Interview', 'Offer']);
@@ -123,7 +129,7 @@ export function summarise(records: ApplicationRecord[], today: Date = new Date()
       deleted += 1;
       continue;
     }
-    if (r.archivedAt) {
+    if (r.isArchived) {
       archived += 1;
       continue;
     }
@@ -159,7 +165,7 @@ export interface TagCount {
  * case-insensitive — two chips for one tag would invite contradictory UI state.
  * Display uses the most-used spelling, ties going to the first one typed.
  */
-export function collectTags(records: ApplicationRecord[]): TagCount[] {
+export function collectTags(records: JobApplication[]): TagCount[] {
   const groups = new Map<string, { display: Map<string, number>; count: number }>();
 
   for (const r of records) {

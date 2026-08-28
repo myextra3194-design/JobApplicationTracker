@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { emptyApplication, STORAGE_KEY } from './normalize';
+import { emptyJobApplication, STORAGE_KEY } from './normalize';
 import { runSelfTests, SELF_TEST_PREFIX } from './selfTest';
 import { LocalRecordStore } from './storage/localRecordStore';
 
@@ -26,15 +26,15 @@ describe('runSelfTests() against a real storage stack', () => {
 
   it('is isolated: no self-test keys leak, real data is untouched', async () => {
     const real = new LocalRecordStore(STORAGE_KEY);
-    real.clear();
-    await real.create(emptyApplication({ company: 'My Actual Application' }));
+    await real.clear();
+    await real.create(emptyJobApplication({ companyName: 'My Actual Application' }));
     const before = await real.all();
 
     await runSelfTests();
 
     const after = await real.all();
-    expect(after.map((r) => r.company)).toEqual(before.map((r) => r.company));
-    expect(after[0]?.company).toBe('My Actual Application');
+    expect(after.map((r) => r.companyName)).toEqual(before.map((r) => r.companyName));
+    expect(after[0]?.companyName).toBe('My Actual Application');
     // Probe the keys the harness actually uses rather than enumerating localStorage,
     // whose key list is not reliable outside a real browser.
     for (const suffix of ['create-read-back', 'corrupt-document-is-quarantined-not-destroyed']) {
@@ -42,7 +42,7 @@ describe('runSelfTests() against a real storage stack', () => {
       expect(globalThis.localStorage.getItem(key), `${key} left behind`).toBeNull();
       expect(globalThis.localStorage.getItem(`${key}.corrupt`), `${key}.corrupt left behind`).toBeNull();
     }
-    real.clear();
+    await real.clear();
   });
 
   it('reads as empty when the document is absent, so first run cannot crash', async () => {
