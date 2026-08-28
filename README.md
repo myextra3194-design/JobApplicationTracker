@@ -19,7 +19,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev` | Vite dev server with HMR |
 | `npm run build` | `tsc -b` typecheck, then production bundle into `dist/` |
 | `npm run preview` | Serve the built `dist/` |
-| `npm test` | 27 unit + integration tests (pure logic, plus the browser path under jsdom) |
+| `npm test` | unit + integration tests (pure logic, form helpers, plus the browser path under jsdom) |
 | `npm run typecheck` | Type-check only |
 
 Any static host works for deployment: the contents of `dist/`, GitHub Pages, Netlify,
