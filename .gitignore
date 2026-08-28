@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Local env / editor noise
+.env
+.env.*
+!.env.example
+.vite/
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.local
+
+# The app's own data never belongs in git — but guard it anyway in case someone
+# points a backup export at the repo root while working.
+*-export.json
+*-backup.json
