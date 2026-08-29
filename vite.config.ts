@@ -8,6 +8,10 @@ import tailwindcss from '@tailwindcss/vite';
 // (https://<port>-<sandboxId>.e2b.app), so: bind all interfaces, allow any
 // Host header, and keep the HMR websocket on the same origin the browser used.
 export default defineConfig({
+  // Relative base so the same `dist/` works from any path: GitHub Pages
+  // project sites (https://<user>.github.io/<repo>/), custom domains, and
+  // local `vite preview`. The dev server ignores it and serves from '/'.
+  base: './',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

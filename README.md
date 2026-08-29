@@ -23,7 +23,29 @@ npm run dev        # http://localhost:5173
 | `npm run typecheck` | Type-check only |
 
 Any static host works for deployment: the contents of `dist/`, GitHub Pages, Netlify,
-or Cloudflare Pages.
+or Cloudflare Pages. Vite builds with a **relative base** (`base: './'`), so the same
+`dist/` works at `https://<user>.github.io/JobApplicationTracker/`, on a custom domain,
+or from a subfolder.
+
+## Deployed app & installing it on your phone (PWA)
+
+Live at **https://myextra3194-design.github.io/JobApplicationTracker/**. GitHub Pages
+serves the committed `dist/` folder ("Deploy from a branch" → *main* → */dist*); each
+part's work lands in a fresh `dist/` build in the same commit.
+
+The app ships a web manifest, icons, a dark theme color, and a small app-shell service
+worker (`public/sw.js`), so you can install it to your home screen and it starts offline:
+
+- **iPhone (Safari):** open the URL → tap **Share** → **Add to Home Screen** → **Add**.
+  Launch it from the icon. No browser bar, works offline after first load.
+- **Android (Chrome):** open the URL → menu **⋮** → **Add to Home screen** → **Install**
+  (Chrome may also show an Install app banner). Launch from the icon.
+
+> ⚠️ **Your data lives in the browser you typed it into.** `localStorage` is per browser *and*
+> per install: the phone's data is not the desktop's data, and on iPhone the installed
+> home-screen app keeps its own storage separate from Safari's tab. There is no sync —
+> that is what Part 11's JSON export/import is for (later). Don't test on two devices
+> expecting to see the same rows.
 
 ## Where your data lives
 
@@ -82,8 +104,9 @@ state, and it lives behind the storage adapter.
 
 ## Status
 
-Part 1 of 12 — foundation, with field names reconciled to the plan. The data model,
-pipeline rules, storage layer, tests and verification harness exist; the CRUD screens,
-board, dashboard and export are the following parts. The spec is
+Parts 1–2 of 12 — foundation + CRUD list. The data model, pipeline rules, storage layer,
+tests and verification harness (Part 1) and the list view with add/edit/delete (Part 2)
+are in. GitHub Pages deploy + PWA installability is in. The Part 3 board view is **not**
+in this repo — it was never merged (see PLAN.md). The spec is
 [`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
 progress and locked decisions are in [`PLAN.md`](PLAN.md).
