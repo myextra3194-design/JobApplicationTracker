@@ -30,8 +30,11 @@ or from a subfolder.
 ## Deployed app & installing it on your phone (PWA)
 
 Live at **https://myextra3194-design.github.io/JobApplicationTracker/**. GitHub Pages
-serves the committed `dist/` folder ("Deploy from a branch" → *main* → */dist*); each
-part's work lands in a fresh `dist/` build in the same commit.
+serves the committed `docs/` folder ("Deploy from a branch" → *main* → */docs*);
+`docs/` is a byte-identical mirror of the built `dist/` (Pages only offers `/` or
+`/docs` as the branch source, not `/dist`). Each part's work lands in a fresh
+`dist/` build plus an identical `docs/` copy in the same commit — keep them in
+sync whenever you build.
 
 The app ships a web manifest, icons, a dark theme color, and a small app-shell service
 worker (`public/sw.js`), so you can install it to your home screen and it starts offline:
