@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApplicationForm } from './components/ApplicationForm';
 import { ApplicationList } from './components/ApplicationList';
+import { KanbanBoard } from './components/KanbanBoard';
 import { SelfTestPanel } from './components/SelfTestPanel';
 import { draftToInput, type ApplicationFormDraft } from './lib/form';
 import { getStorage } from './lib/storage';
-import type { JobApplication } from './lib/types';
+import type { ApplicationStatus, JobApplication } from './lib/types';
+
+type ViewMode = 'list' | 'board';
 
 /**
- * Part 2: list of live (non-archived) applications, plus add / edit / delete.
- * Mutations go through getStorage(); the list reloads immediately after each one.
+ * Part 3: the Part 2 list plus a Kanban board of the seven pipeline columns,
+ * switched by a toggle at the top. Both views read and write the same store —
+ * a status change from a board card lands in the list on the next render.
  */
 export default function App() {
   const storage = getStorage();
   const [rows, setRows] = useState<JobApplication[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>('list');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<JobApplication | null>(null);
   const [saving, setSaving] = useState(false);
@@ -67,6 +72,16 @@ export default function App() {
     }
   }
 
+  async function handleStatusChange(row: JobApplication, status: ApplicationStatus) {
+    if (status === row.status) return;
+    try {
+      await storage.records.update(row.id, { status });
+      await reload();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function handleDelete(row: JobApplication) {
     const label = [row.companyName, row.jobTitle].filter(Boolean).join(' — ') || 'this application';
     if (!window.confirm(`Delete ${label}?`)) return;
@@ -85,7 +100,7 @@ export default function App() {
           <div className="flex size-9 items-center justify-center rounded-lg bg-blue-500/15 text-lg">📋</div>
           <div className="mr-auto">
             <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
-            <p className="text-xs text-slate-400">Part 2 of 12 — list, add, edit, delete</p>
+            <p className="text-xs text-slate-400">Part 3 of 12 — list, board, add, edit, delete</p>
           </div>
           <DriverBadge driver={storage.driver} />
           <button
@@ -108,7 +123,39 @@ export default function App() {
         {rows === null ? (
           <p className="text-sm text-slate-500">Loading…</p>
         ) : (
-          <ApplicationList rows={rows} onRowClick={openEdit} onDelete={(row) => void handleDelete(row)} />
+          <>
+            <div className="flex w-fit rounded-lg border border-hairline bg-surface p-0.5" role="tablist" aria-label="View">
+              {(
+                [
+                  ['list', 'List View'],
+                  ['board', 'Board View'],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === mode}
+                  onClick={() => setView(mode)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    view === mode ? 'bg-surface-raised text-slate-100' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {view === 'list' ? (
+              <ApplicationList rows={rows} onRowClick={openEdit} onDelete={(row) => void handleDelete(row)} />
+            ) : (
+              <KanbanBoard
+                rows={rows}
+                onStatusChange={(row, status) => void handleStatusChange(row, status)}
+                onCardClick={openEdit}
+              />
+            )}
+          </>
         )}
 
         <details className="rounded-xl border border-hairline bg-surface">

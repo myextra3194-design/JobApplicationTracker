@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyJobApplication } from './normalize';
-import { applyQuery, collectTags, sortRecords, summarise } from './query';
-import type { JobApplication } from './types';
+import { applyQuery, collectTags, groupByStatus, sortRecords, summarise } from './query';
+import { STATUSES, type JobApplication } from './types';
 
 /** Sat 29 Aug 2026; that Monday (24th) starts the current week. */
 const TODAY = new Date(2026, 7, 29);
@@ -123,6 +123,31 @@ describe('sortRecords', () => {
     const ids = sortRecords([pick('c'), pick('a')], 'matchScore', 'desc').map((r) => r.id);
     expect(ids).toEqual(['a', 'c']);
     expect(sortRecords([pick('c'), pick('a')], 'matchScore', 'asc').map((r) => r.id)).toEqual(['c', 'a']);
+  });
+});
+
+describe('groupByStatus', () => {
+  const live = FIXTURES.filter((r) => !r.deletedAt && !r.isArchived);
+
+  it('puts every record in exactly its stage column, in pipeline order', () => {
+    const columns = groupByStatus(live);
+    expect(Object.keys(columns)).toEqual([...STATUSES]);
+    expect(columns.Applied.map((r) => r.id)).toEqual(['b']);
+    expect(columns.Interview.map((r) => r.id)).toEqual(['a']);
+    expect(columns.Offer.map((r) => r.id)).toEqual(['d']);
+    expect(columns.Rejected.map((r) => r.id)).toEqual(['c']);
+  });
+
+  it('keeps empty columns present so the board still draws all seven', () => {
+    expect(groupByStatus([]).Saved).toEqual([]);
+    expect(groupByStatus(live).Saved).toEqual([]); // the only Saved row (e) is archived
+    expect(groupByStatus(live).Shortlisted).toEqual([]);
+    expect(groupByStatus(live).Withdrawn).toEqual([]);
+  });
+
+  it('preserves the input order within a column (the store already sorts)', () => {
+    const second = rec({ id: 'g', companyName: 'Grid Two', status: 'Applied' });
+    expect(groupByStatus([pick('b'), second]).Applied.map((r) => r.id)).toEqual(['b', 'g']);
   });
 });
 

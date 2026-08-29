@@ -96,6 +96,19 @@ export function sortRecords(records: JobApplication[], key: SortKey, dir: SortDi
   });
 }
 
+/**
+ * Group records into the board's columns — one per stage, in pipeline order.
+ * Callers pass already-visible rows (the store's default `list()` hides
+ * archived and deleted), so no visibility rules live here. A record can never
+ * land in "no column": the normaliser constrains `status` to the closed set.
+ */
+export function groupByStatus(records: JobApplication[]): Record<ApplicationStatus, JobApplication[]> {
+  const columns = {} as Record<ApplicationStatus, JobApplication[]>;
+  for (const status of STATUSES) columns[status] = [];
+  for (const record of records) columns[record.status].push(record);
+  return columns;
+}
+
 export interface PipelineCounts {
   /** Live, non-archived records. */
   total: number;
