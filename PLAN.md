@@ -32,18 +32,21 @@ wins except for the locked decisions below.
 - Files cascade from IndexedDB only on permanent delete, via
   `attachments.removeAllFor(applicationId)`. There is no `attachmentIds` field
   on the record; Part 5 keys files by application id.
-- Deployment: GitHub Pages, **"Deploy from a branch" → `<branch>` → `/dist`**. The
-  built `dist/` is committed next to its source (exception to the repo's `dist/`
-  ignore, applied with `git add -f`), because the sandbox's GitHub App has no
-  `workflows` permission and therefore cannot push a CI deploy workflow.
-  `.github/workflows/deploy.yml` exists in the sandbox tree as the future
-  auto-deploy upgrade: paste it in via the web UI and switch Pages to
-  "GitHub Actions" when you want `dist/` out of git. Vite uses a relative
-  `base: './'` so the same `dist/` works at any mount path. PWA = hand-written
-  `public/manifest.webmanifest` + icons + app-shell `public/sw.js`; no plugin, no
-  new dependency. The service worker is registered from `src/main.tsx` in
-  production builds only and caches HTTP responses only — it is not part of the
-  data seam and never touches `localStorage`/IndexedDB.
+- Deployment: GitHub Pages, **"Deploy from a branch" → `<branch>` → `/docs`**.
+  Pages' branch source only offers `/` or `/docs` (never `/dist`), so `docs/` is a
+  committed byte-identical mirror of the built `dist/`, and every commit that
+  changes `dist/` must copy the new build to `docs/` in the same commit
+  (`cp -a dist/. docs/`). `dist/` stays as the Vite build output and is committed
+  next to its source (exception to the repo's `dist/` ignore, applied with
+  `git add -f`), because the sandbox's GitHub App has no `workflows` permission
+  and therefore cannot push a CI deploy workflow. `.github/workflows/deploy.yml`
+  exists in the sandbox tree as the future auto-deploy upgrade: paste it in via
+  the web UI and switch Pages to "GitHub Actions" when you want `dist/` out of
+  git. Vite uses a relative `base: './'` so the same build works at any mount
+  path. PWA = hand-written `public/manifest.webmanifest` + icons + app-shell
+  `public/sw.js`; no plugin, no new dependency. The service worker is registered
+  from `src/main.tsx` in production builds only and caches HTTP responses only —
+  it is not part of the data seam and never touches `localStorage`/IndexedDB.
 - Data is per browser install: phone ≠ desktop ≠ iPhone-home-screen-app. Sync is out
   of scope until Part 11's export/import; nobody should plan on cross-device
   continuity.
