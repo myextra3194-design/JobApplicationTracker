@@ -5,6 +5,13 @@ import { STATUSES, type ApplicationStatus, type JobApplication } from '../lib/ty
 interface KanbanBoardProps {
   /** Live rows (non-archived, non-deleted), in whatever order the store returned them. */
   rows: JobApplication[];
+  /**
+   * Part 4: the ids matching the active filters. Cards outside the set are
+   * dimmed, not removed or re-sorted — the board keeps its column layout,
+   * and a dimmed card's status dropdown still works, so you can move it
+   * back into whatever the filter is showing.
+   */
+  matchIds: ReadonlySet<string>;
   onStatusChange: (row: JobApplication, status: ApplicationStatus) => void;
   onCardClick: (row: JobApplication) => void;
 }
@@ -16,7 +23,7 @@ interface KanbanBoardProps {
  * drag-and-drop — and write through the same store as the list view, so the
  * two views can never disagree.
  */
-export function KanbanBoard({ rows, onStatusChange, onCardClick }: KanbanBoardProps) {
+export function KanbanBoard({ rows, matchIds, onStatusChange, onCardClick }: KanbanBoardProps) {
   if (rows.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-hairline bg-surface px-4 py-10 text-center text-sm text-slate-400">
@@ -26,6 +33,7 @@ export function KanbanBoard({ rows, onStatusChange, onCardClick }: KanbanBoardPr
   }
 
   const columns = groupByStatus(rows);
+  const isDimmed = (row: JobApplication) => !matchIds.has(row.id);
 
   return (
     <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2">
@@ -52,6 +60,7 @@ export function KanbanBoard({ rows, onStatusChange, onCardClick }: KanbanBoardPr
                   <BoardCard
                     key={row.id}
                     row={row}
+                    dimmed={isDimmed(row)}
                     onStatusChange={onStatusChange}
                     onCardClick={onCardClick}
                   />
@@ -67,17 +76,22 @@ export function KanbanBoard({ rows, onStatusChange, onCardClick }: KanbanBoardPr
 
 function BoardCard({
   row,
+  dimmed,
   onStatusChange,
   onCardClick,
 }: {
   row: JobApplication;
+  /** Outside the active Part 4 filters: visible but faded. */
+  dimmed: boolean;
   onStatusChange: (row: JobApplication, status: ApplicationStatus) => void;
   onCardClick: (row: JobApplication) => void;
 }) {
   return (
     <article
       onClick={() => onCardClick(row)}
-      className="cursor-pointer rounded-lg border border-hairline bg-surface-raised p-2.5 transition-colors hover:border-sky-500/40"
+      className={`cursor-pointer rounded-lg border border-hairline bg-surface-raised p-2.5 transition-all ${
+        dimmed ? 'opacity-40 saturate-50' : 'hover:border-sky-500/40'
+      }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">

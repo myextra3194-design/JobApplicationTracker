@@ -14,18 +14,76 @@ export type SortKey =
   | 'status'
   | 'applicationDate'
   | 'followUpDate'
+  | 'interviewDate'
   | 'matchScore';
 export type SortDir = 'asc' | 'desc';
 
 export interface ApplicationQuery {
   search?: string;
   statuses?: ApplicationStatus[];
+  /** Single-tag filter (original shape). */
   tag?: string;
+  /** Multi-select tags: a row matches if it has at least one of them (OR inside). */
+  tags?: string[];
+  /** Job portal/source, compared case-insensitively after trimming. */
+  jobPortal?: string;
   followUpDue?: boolean;
   includeArchived?: boolean;
   includeDeleted?: boolean;
   sortBy?: SortKey;
   sortDir?: SortDir;
+}
+
+/**
+ * UI state of the Part 4 toolbar — flat and JSON-plain so a component can hold
+ * it in a single `useState` and map it onto a query with `filterToQuery`.
+ */
+export interface FilterState {
+  search: string;
+  statuses: ApplicationStatus[];
+  jobPortal: string;
+  tags: string[];
+  sortKey: SortKey;
+  sortDir: SortDir;
+}
+
+/** The list's original behaviour: everything, most recently updated first. */
+export const DEFAULT_FILTERS: FilterState = {
+  search: '',
+  statuses: [],
+  jobPortal: '',
+  tags: [],
+  sortKey: 'updatedAt',
+  sortDir: 'desc',
+};
+
+/** Maps toolbar state onto a store query, omitting blank conditions. */
+export function filterToQuery(state: FilterState): ApplicationQuery {
+  const query: ApplicationQuery = { sortBy: state.sortKey, sortDir: state.sortDir };
+  const search = state.search.trim();
+  if (search) query.search = search;
+  if (state.statuses.length > 0) query.statuses = [...state.statuses];
+  const portal = state.jobPortal.trim();
+  if (portal) query.jobPortal = portal;
+  const tags = state.tags.map((t) => t.trim()).filter(Boolean);
+  if (tags.length > 0) query.tags = tags;
+  return query;
+}
+
+/**
+ * Does any toolbar control deviate from the defaults? Drives the enabled
+ * state of "Clear filters". Mirrors `filterToQuery` exactly: a control whose
+ * value would trim away is inactive, so the two never disagree.
+ */
+export function hasActiveFilters(state: FilterState): boolean {
+  return (
+    state.search.trim() !== '' ||
+    state.statuses.length > 0 ||
+    state.jobPortal.trim() !== '' ||
+    state.tags.some((t) => t.trim() !== '') ||
+    state.sortKey !== DEFAULT_FILTERS.sortKey ||
+    state.sortDir !== DEFAULT_FILTERS.sortDir
+  );
 }
 
 const DEFAULTS = {
@@ -39,19 +97,35 @@ export function applyQuery(records: JobApplication[], query: ApplicationQuery = 
   const q = { ...DEFAULTS, ...query };
   const needle = q.search?.trim().toLowerCase() ?? '';
   const statuses = q.statuses?.length ? new Set(q.statuses) : null;
-  const tag = q.tag?.trim().toLowerCase();
+  const wantedTags = selectedTags(q);
+  const portal = q.jobPortal?.trim().toLowerCase();
 
   const filtered = records.filter((r) => {
     if (r.deletedAt) return q.includeDeleted;
     if (r.isArchived && !q.includeArchived) return false;
     if (statuses && !statuses.has(r.status)) return false;
     if (q.followUpDue && !isFollowUpDue(r)) return false;
-    if (tag && !r.tags.some((t) => t.toLowerCase() === tag)) return false;
+    if (wantedTags && !r.tags.some((t) => wantedTags.has(t.trim().toLowerCase()))) return false;
+    if (portal && r.jobPortal.trim().toLowerCase() !== portal) return false;
     if (needle && !searchableText(r).includes(needle)) return false;
     return true;
   });
 
   return sortRecords(filtered, q.sortBy, q.sortDir);
+}
+
+/**
+ * The tag selection, as a lower-cased set: the union of the legacy single
+ * `tag` and the multi-select `tags`. A row matches when it has at least one
+ * (OR inside the selection, AND against every other condition).
+ */
+function selectedTags(q: ApplicationQuery): Set<string> | null {
+  const wanted = new Set(
+    [...(q.tags ?? []), ...(q.tag ? [q.tag] : [])]
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  return wanted.size > 0 ? wanted : null;
 }
 
 /** Fields a free-text search looks at. Deliberately excludes internal ids. */
@@ -172,41 +246,68 @@ export interface TagCount {
   count: number;
 }
 
+export interface PortalCount {
+  portal: string;
+  count: number;
+}
+
+interface SpellingCount {
+  value: string;
+  count: number;
+}
+
 /**
- * Distinct tags across non-deleted records with usage counts, most-used first.
- * Case variants are merged (`Qatar` + `qatar` = one chip) because the filter is
- * case-insensitive — two chips for one tag would invite contradictory UI state.
- * Display uses the most-used spelling, ties going to the first one typed.
+ * Merge case variants into one entry (`Qatar` + `qatar` = one chip) because the
+ * filters are case-insensitive — two chips for one value would invite
+ * contradictory UI state. Display uses the most-used spelling, ties going to
+ * the first one typed. Deliberately not localeCompare-based for the spelling
+ * choice: casing order is locale-dependent and would flip between machines.
  */
-export function collectTags(records: JobApplication[]): TagCount[] {
+function groupSpellings(rawValues: string[]): SpellingCount[] {
   const groups = new Map<string, { display: Map<string, number>; count: number }>();
 
-  for (const r of records) {
-    if (r.deletedAt) continue;
-    for (const raw of r.tags) {
-      const tag = raw.trim();
-      if (!tag) continue;
-      const key = tag.toLowerCase();
-      const group = groups.get(key) ?? { display: new Map<string, number>(), count: 0 };
-      group.display.set(tag, (group.display.get(tag) ?? 0) + 1);
-      group.count += 1;
-      groups.set(key, group);
-    }
+  for (const raw of rawValues) {
+    const value = raw.trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    const group = groups.get(key) ?? { display: new Map<string, number>(), count: 0 };
+    group.display.set(value, (group.display.get(value) ?? 0) + 1);
+    group.count += 1;
+    groups.set(key, group);
   }
 
   return [...groups.entries()]
     .map(([key, group]) => {
-      // Most-used spelling wins; ties keep the first spelling seen. Deliberately not
-      // localeCompare-based: casing order is locale-dependent and would flip between machines.
-      let display = key;
+      let value = key;
       let best = 0;
       for (const [spelling, count] of group.display) {
         if (count > best) {
           best = count;
-          display = spelling;
+          value = spelling;
         }
       }
-      return { tag: display, count: group.count };
+      return { value, count: group.count };
     })
-    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+}
+
+/**
+ * Distinct tags across non-deleted records with usage counts, most-used first.
+ */
+export function collectTags(records: JobApplication[]): TagCount[] {
+  return groupSpellings(records.flatMap((r) => (r.deletedAt ? [] : r.tags))).map((g) => ({
+    tag: g.value,
+    count: g.count,
+  }));
+}
+
+/**
+ * Distinct job portal/source values across non-deleted records, most-used first.
+ * Feeds the Part 4 portal filter's option list.
+ */
+export function collectPortals(records: JobApplication[]): PortalCount[] {
+  return groupSpellings(records.flatMap((r) => (r.deletedAt ? [] : [r.jobPortal]))).map((g) => ({
+    portal: g.value,
+    count: g.count,
+  }));
 }

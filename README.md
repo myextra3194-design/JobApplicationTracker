@@ -107,9 +107,11 @@ state, and it lives behind the storage adapter.
 
 ## Status
 
-Parts 1–2 of 12 — foundation + CRUD list. The data model, pipeline rules, storage layer,
-tests and verification harness (Part 1) and the list view with add/edit/delete (Part 2)
-are in. GitHub Pages deploy + PWA installability is in. The Part 3 board view is **not**
-in this repo — it was never merged (see PLAN.md). The spec is
+Parts 1–4 of 12 — foundation, CRUD list, Kanban board, and search/filter/sort. The data
+model, pipeline rules, storage layer, tests and verification harness (Part 1), the list
+view with add/edit/delete (Part 2), the List/Board toggle with the seven-column board and
+per-card status dropdown (Part 3), and the search/filter/sort toolbar over both views —
+the list hides non-matching rows, the board dims them (Part 4) — are in. GitHub Pages
+deploy + PWA installability is in. The spec is
 [`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
 progress and locked decisions are in [`PLAN.md`](PLAN.md).

@@ -3,6 +3,8 @@ import type { JobApplication } from '../lib/types';
 
 interface ApplicationListProps {
   rows: JobApplication[];
+  /** True when rows is the search/filter result rather than the whole collection. */
+  filtered?: boolean;
   onRowClick: (row: JobApplication) => void;
   onDelete: (row: JobApplication) => void;
 }
@@ -11,11 +13,13 @@ function dash(value: string | null): string {
   return value ? value : '—';
 }
 
-export function ApplicationList({ rows, onRowClick, onDelete }: ApplicationListProps) {
+export function ApplicationList({ rows, filtered = false, onRowClick, onDelete }: ApplicationListProps) {
   if (rows.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-hairline bg-surface px-4 py-10 text-center text-sm text-slate-400">
-        No applications yet — add your first one.
+        {filtered
+          ? 'No applications match your search or filters — clear them to see everything.'
+          : 'No applications yet — add your first one.'}
       </p>
     );
   }

@@ -50,10 +50,15 @@ wins except for the locked decisions below.
 - Data is per browser install: phone ≠ desktop ≠ iPhone-home-screen-app. Sync is out
   of scope until Part 11's export/import; nobody should plan on cross-device
   continuity.
-- Repo state check (2026-08-29): this checkout contains **Parts 1–2 only**. PRs #1 and
-  #2 are the whole history; no Part 3 board branch exists on the remote, despite
-  Parts 1–3 being believed done. Awaiting owner decision before Part 3 is rebuilt to
-  spec (kanban board + List/Board toggle) so Part 4's filters cover both views.
+- Repo state check (2026-08-29): this checkout contains **Parts 1–4**. Part 3 was
+  rebuilt to spec after the old board branch was found never merged: List/Board
+  toggle at the top of the page, the seven columns in pipeline order, non-archived
+  only, and status change via a dropdown on the card (no drag-and-drop) — same
+  store as the list. Part 4's search/filters/sort live in `src/lib/query.ts` as
+  `filterToQuery` / `DEFAULT_FILTERS` / `hasActiveFilters` on top of `applyQuery`,
+  which gained the multi-tag `tags`, the `jobPortal` filter and the `interviewDate`
+  sort key (extended, not duplicated). One toolbar drives both views: the list
+  hides non-matching rows, the board dims them and does not sort.
 
 ---
 

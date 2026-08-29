@@ -150,7 +150,7 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       return '2 of 3 updated, third untouched, unknown ids ignored';
     }),
 
-    runCheck('filters: status, search, tag, due follow-up', async (store) => {
+    runCheck('filters: search, status, multi-tag, portal, follow-up', async (store) => {
       await store.replaceAll([
         emptyJobApplication({
           id: 'f1',
@@ -158,13 +158,16 @@ export async function runSelfTests(): Promise<CheckResult[]> {
           status: 'Interview',
           followUpDate: todayIso(),
           interviewDate: todayIso(),
+          jobPortal: 'LinkedIn',
+          tags: ['qatar', 'referral'],
         }),
-        emptyJobApplication({ id: 'f2', companyName: 'Beta Grid', status: 'Rejected' }),
+        emptyJobApplication({ id: 'f2', companyName: 'Beta Grid', status: 'Rejected', jobPortal: 'Indeed' }),
         emptyJobApplication({
           id: 'f3',
           companyName: 'Gamma Energy',
           status: 'Applied',
           tags: ['qatar'],
+          jobPortal: 'Company website',
           followUpDate: '2099-01-01',
         }),
       ]);
@@ -174,11 +177,29 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       assert(search.length === 1 && search[0]?.id === 'f2', 'search must be case-insensitive across fields');
       const due = await store.list({ followUpDue: true });
       assert(due.length === 1 && due[0]?.id === 'f1', 'due/today follow-ups must surface, future ones must not');
-      const tagged = await store.list({ tag: 'Qatar' });
-      assert(tagged.length === 1 && tagged[0]?.id === 'f3', 'tag filter must be case-insensitive');
+      const singleTag = await store.list({ tag: 'referral' });
+      assert(singleTag.length === 1 && singleTag[0]?.id === 'f1', 'single-tag filter must be case-insensitive');
+      // Multi-tag is OR inside: f1 and f3 share 'qatar', 'never-used' matches nobody.
+      const multiTag = (await store.list({ tags: ['QATAR', 'never-used'] })).map((r) => r.id).sort();
+      assert(
+        multiTag.length === 2 && multiTag.includes('f1') && multiTag.includes('f3'),
+        `multi-tag filter must OR-match any selected tag, got [${multiTag.join(', ')}]`,
+      );
+      const portal = await store.list({ jobPortal: 'LINKEDIN' });
+      assert(portal.length === 1 && portal[0]?.id === 'f1', 'portal filter must be case-insensitive');
+      // Everything combines with AND — the spec's search+status example, plus tags and portal.
+      const combined = await store.list({
+        search: 'alpha',
+        statuses: ['Interview'],
+        tags: ['referral'],
+        jobPortal: 'LinkedIn',
+      });
+      assert(combined.length === 1 && combined[0]?.id === 'f1', 'search + status + tags + portal must AND together');
+      const andMisses = await store.list({ search: 'alpha', statuses: ['Applied'] });
+      assert(andMisses.length === 0, 'search + status must exclude rows that miss either');
       const f1 = await store.get('f1');
       assert(f1 !== null && isFollowUpDue(f1), 'isFollowUpDue disagrees with the query filter');
-      return 'status + fuzzy search + due-follow-up + tag all agree';
+      return 'search + status + multi-tag + portal all AND correctly; due-follow-up surfaces';
     }),
 
     runCheck('normaliser defends against garbage input', () => {
