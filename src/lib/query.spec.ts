@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { emptyJobApplication } from './normalize';
-import { applyQuery, collectTags, sortRecords, summarise } from './query';
-import type { JobApplication } from './types';
+import {
+  applyQuery,
+  collectPortals,
+  collectTags,
+  DEFAULT_FILTERS,
+  filterToQuery,
+  groupByStatus,
+  hasActiveFilters,
+  sortRecords,
+  summarise,
+  type FilterState,
+} from './query';
+import { STATUSES, type JobApplication } from './types';
 
 /** Sat 29 Aug 2026; that Monday (24th) starts the current week. */
 const TODAY = new Date(2026, 7, 29);
@@ -16,6 +27,7 @@ const FIXTURES: JobApplication[] = [
     applicationDate: '2026-08-24',
     interviewDate: '2026-08-28',
     followUpDate: '2026-08-20',
+    jobPortal: 'LinkedIn',
     tags: ['Qatar', 'utility'],
     matchScore: 82,
   }),
@@ -24,14 +36,18 @@ const FIXTURES: JobApplication[] = [
     companyName: 'beta grid',
     status: 'Applied',
     applicationDate: '2026-08-26',
+    interviewDate: '2026-08-30',
     notes: 'referral from H.',
+    jobPortal: 'Indeed',
     tags: ['qatar'],
   }),
   rec({ id: 'c', companyName: 'Gamma Energy', status: 'Rejected', applicationDate: '2026-08-10', finalResult: 'Rejected' }),
   // 'd' deliberately has no applicationDate: an Offer recorded after the fact.
-  rec({ id: 'd', companyName: 'Delta Power', status: 'Offer', salary: '7000 QAR' }),
+  // 'linkedin' is a case variant of a's 'LinkedIn' — the portal filter must merge them.
+  rec({ id: 'd', companyName: 'Delta Power', status: 'Offer', salary: '7000 QAR', jobPortal: 'linkedin' }),
   rec({ id: 'e', companyName: 'Epsilon KEIC', status: 'Saved', isArchived: true }),
-  rec({ id: 'f', companyName: 'Zeta Rejected', status: 'Rejected', deletedAt: '2026-08-22T00:00:00.000Z' }),
+  // Deleted rows are excluded from filters and option lists: f's portal must not surface.
+  rec({ id: 'f', companyName: 'Zeta Rejected', status: 'Rejected', jobPortal: 'Indeed', deletedAt: '2026-08-22T00:00:00.000Z' }),
 ];
 
 const LIVE_IDS = ['a', 'b', 'c', 'd'];
@@ -110,6 +126,94 @@ describe('applyQuery', () => {
     const desc = applyQuery(FIXTURES, { sortBy: 'applicationDate', sortDir: 'desc' }).map((r) => r.id);
     expect(desc).toEqual(['b', 'a', 'c', 'd']);
   });
+
+  it('matches a row when it has at least one selected tag (OR inside the tag set)', () => {
+    expect(applyQuery(FIXTURES, { tags: ['utility', 'never-used'] }).map((r) => r.id)).toEqual(['a']);
+    expect(
+      applyQuery(FIXTURES, { tags: ['QATAR', 'UTILITY'] })
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(['a', 'b']);
+    expect(applyQuery(FIXTURES, { tags: ['never-used'] })).toEqual([]);
+    // An empty multi-tag selection is "no filter", like an empty status list.
+    expect(applyQuery(FIXTURES, { tags: [] }).length).toBe(LIVE_IDS.length);
+    // The legacy single `tag` and the multi `tags` union — they do not overwrite each other.
+    expect(
+      applyQuery(FIXTURES, { tag: 'utility', tags: ['qatar'] })
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(['a', 'b']);
+  });
+
+  it('filters by job portal case-insensitively, trimming padding', () => {
+    expect(
+      applyQuery(FIXTURES, { jobPortal: 'LINKEDIN' })
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(['a', 'd']);
+    expect(applyQuery(FIXTURES, { jobPortal: 'indeed' }).map((r) => r.id)).toEqual(['b']);
+    expect(applyQuery(FIXTURES, { jobPortal: '  LinkedIn  ' }).map((r) => r.id).sort()).toEqual(['a', 'd']);
+    // Whitespace-only is "no filter".
+    expect(applyQuery(FIXTURES, { jobPortal: '   ' }).length).toBe(LIVE_IDS.length);
+  });
+
+  it('combines search, status, portal and tags with AND', () => {
+    // The spec's own example: searching "Acme" while filtered to Interview only
+    // shows the Alpha rows that are in Interview — and only those.
+    expect(applyQuery(FIXTURES, { search: 'alpha', statuses: ['Interview'] }).map((r) => r.id)).toEqual(['a']);
+    expect(applyQuery(FIXTURES, { search: 'alpha', statuses: ['Applied'] })).toEqual([]);
+    expect(
+      applyQuery(FIXTURES, { search: 'alpha', statuses: ['Interview'], tags: ['utility'], jobPortal: 'linkedin' })
+        .map((r) => r.id),
+    ).toEqual(['a']);
+  });
+
+  it('sorts by interviewDate, missing dates last in either direction', () => {
+    const asc = applyQuery(FIXTURES, { sortBy: 'interviewDate', sortDir: 'asc' }).map((r) => r.id);
+    expect(asc).toEqual(['a', 'b', 'c', 'd']); // a (28th) before b (30th), blanks after
+    const desc = applyQuery(FIXTURES, { sortBy: 'interviewDate', sortDir: 'desc' }).map((r) => r.id);
+    expect(desc).toEqual(['b', 'a', 'c', 'd']);
+  });
+});
+
+describe('filterToQuery / hasActiveFilters', () => {
+  it('default state is the unchanged list: updatedAt desc, no conditions', () => {
+    expect(filterToQuery(DEFAULT_FILTERS)).toEqual({ sortBy: 'updatedAt', sortDir: 'desc' });
+    expect(hasActiveFilters(DEFAULT_FILTERS)).toBe(false);
+  });
+
+  it('maps every toolbar control onto the store query, trimmed', () => {
+    const state: FilterState = {
+      search: '  acme  ',
+      statuses: ['Applied', 'Interview'],
+      jobPortal: ' LinkedIn ',
+      tags: ['qatar', '   ', 'remote'],
+      sortKey: 'applicationDate',
+      sortDir: 'asc',
+    };
+    expect(filterToQuery(state)).toEqual({
+      search: 'acme',
+      statuses: ['Applied', 'Interview'],
+      jobPortal: 'LinkedIn',
+      tags: ['qatar', 'remote'],
+      sortBy: 'applicationDate',
+      sortDir: 'asc',
+    });
+    expect(hasActiveFilters(state)).toBe(true);
+  });
+
+  it('whitespace-only controls filter nothing and count as inactive', () => {
+    expect(filterToQuery({ ...DEFAULT_FILTERS, search: '   ', jobPortal: '  ' })).toEqual({
+      sortBy: 'updatedAt',
+      sortDir: 'desc',
+    });
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, search: '   ', tags: ['  '] })).toBe(false);
+  });
+
+  it('treats a changed sort as an active filter (Clear filters resets it too)', () => {
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, sortKey: 'companyName' })).toBe(true);
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, sortDir: 'asc' })).toBe(true);
+  });
 });
 
 describe('sortRecords', () => {
@@ -123,6 +227,31 @@ describe('sortRecords', () => {
     const ids = sortRecords([pick('c'), pick('a')], 'matchScore', 'desc').map((r) => r.id);
     expect(ids).toEqual(['a', 'c']);
     expect(sortRecords([pick('c'), pick('a')], 'matchScore', 'asc').map((r) => r.id)).toEqual(['c', 'a']);
+  });
+});
+
+describe('groupByStatus', () => {
+  const live = FIXTURES.filter((r) => !r.deletedAt && !r.isArchived);
+
+  it('puts every record in exactly its stage column, in pipeline order', () => {
+    const columns = groupByStatus(live);
+    expect(Object.keys(columns)).toEqual([...STATUSES]);
+    expect(columns.Applied.map((r) => r.id)).toEqual(['b']);
+    expect(columns.Interview.map((r) => r.id)).toEqual(['a']);
+    expect(columns.Offer.map((r) => r.id)).toEqual(['d']);
+    expect(columns.Rejected.map((r) => r.id)).toEqual(['c']);
+  });
+
+  it('keeps empty columns present so the board still draws all seven', () => {
+    expect(groupByStatus([]).Saved).toEqual([]);
+    expect(groupByStatus(live).Saved).toEqual([]); // the only Saved row (e) is archived
+    expect(groupByStatus(live).Shortlisted).toEqual([]);
+    expect(groupByStatus(live).Withdrawn).toEqual([]);
+  });
+
+  it('preserves the input order within a column (the store already sorts)', () => {
+    const second = rec({ id: 'g', companyName: 'Grid Two', status: 'Applied' });
+    expect(groupByStatus([pick('b'), second]).Applied.map((r) => r.id)).toEqual(['b', 'g']);
   });
 });
 
@@ -180,6 +309,22 @@ describe('collectTags', () => {
   it('drops blanks and trims padding', () => {
     expect(collectTags([rec({ id: 'x', companyName: 'X', tags: ['', '   ', '  qatar  '] })])).toEqual([
       { tag: 'qatar', count: 1 },
+    ]);
+  });
+});
+
+describe('collectPortals', () => {
+  it('merges case variants into one option, most-used first, deleted rows excluded', () => {
+    expect(collectPortals(FIXTURES)).toEqual([
+      { portal: 'LinkedIn', count: 2 }, // a + d (case variants); f is deleted so f's 'Indeed' never counts
+      { portal: 'Indeed', count: 1 },
+    ]);
+  });
+
+  it('keeps archived rows (like tags) and drops blank portals', () => {
+    const archived = rec({ id: 'h', companyName: 'H', jobPortal: 'Indeed', isArchived: true });
+    expect(collectPortals([archived, rec({ id: 'i', companyName: 'I' })])).toEqual([
+      { portal: 'Indeed', count: 1 },
     ]);
   });
 });
