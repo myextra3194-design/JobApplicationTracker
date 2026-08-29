@@ -23,3 +23,12 @@ body {
   outline: 2px solid var(--color-sky-400);
   outline-offset: 2px;
 }
+
+/* Installed as a PWA on iPhone: keep content clear of the notch and the
+   home-indicator strip (viewport-fit=cover makes these insets non-zero). */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

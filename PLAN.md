@@ -32,6 +32,25 @@ wins except for the locked decisions below.
 - Files cascade from IndexedDB only on permanent delete, via
   `attachments.removeAllFor(applicationId)`. There is no `attachmentIds` field
   on the record; Part 5 keys files by application id.
+- Deployment: GitHub Pages, **"Deploy from a branch" → `<branch>` → `/dist`**. The
+  built `dist/` is committed next to its source (exception to the repo's `dist/`
+  ignore, applied with `git add -f`), because the sandbox's GitHub App has no
+  `workflows` permission and therefore cannot push a CI deploy workflow.
+  `.github/workflows/deploy.yml` exists in the sandbox tree as the future
+  auto-deploy upgrade: paste it in via the web UI and switch Pages to
+  "GitHub Actions" when you want `dist/` out of git. Vite uses a relative
+  `base: './'` so the same `dist/` works at any mount path. PWA = hand-written
+  `public/manifest.webmanifest` + icons + app-shell `public/sw.js`; no plugin, no
+  new dependency. The service worker is registered from `src/main.tsx` in
+  production builds only and caches HTTP responses only — it is not part of the
+  data seam and never touches `localStorage`/IndexedDB.
+- Data is per browser install: phone ≠ desktop ≠ iPhone-home-screen-app. Sync is out
+  of scope until Part 11's export/import; nobody should plan on cross-device
+  continuity.
+- Repo state check (2026-08-29): this checkout contains **Parts 1–2 only**. PRs #1 and
+  #2 are the whole history; no Part 3 board branch exists on the remote, despite
+  Parts 1–3 being believed done. Awaiting owner decision before Part 3 is rebuilt to
+  spec (kanban board + List/Board toggle) so Part 4's filters cover both views.
 
 ---
 
