@@ -59,7 +59,7 @@ wins except for the locked decisions below.
 - Data is per browser install: phone ≠ desktop ≠ iPhone-home-screen-app. Sync is out
   of scope until Part 11's export/import; nobody should plan on cross-device
   continuity.
-- Repo state check (2026-08-30): this checkout contains **Parts 1–6**. Part 3 was
+- Repo state check (2026-08-30): this checkout contains **Parts 1–7**. Part 3 was
   rebuilt to spec after the old board branch was found never merged: List/Board
   toggle at the top of the page, the seven columns in pipeline order, non-archived
   only, and status change via a dropdown on the card (no drag-and-drop) — same
@@ -82,9 +82,17 @@ wins except for the locked decisions below.
   blank-or-`Pending` counts as not filled; Rejected/Withdrawn only; never
   blocks saving), and the add-only duplicate warning (`duplicateKey` /
   `findDuplicates` in `src/lib/duplicates.ts` — case-insensitive, trimmed,
-  excludes archived and deleted rows, edit mode never warns). No field names
-  changed; record still has no `attachmentIds`, `deletedAt` stays as the undo
-  window, and the 13th foundation check is untouched.
+  excludes archived and deleted rows, edit mode never warns).
+  Part 7 is in: an Upcoming tab on the existing List/Board toggle (no router),
+  `dueFollowUps` wrapping `isFollowUpDue` and `upcomingInterviews` in
+  `src/lib/upcoming.ts` (archived and deleted excluded; follow-ups soonest-first
+  with overdue red / due-today amber; interviews strictly in the future, calm
+  sky treatment), each item opening that application's edit form, and a per-event
+  `.ics` download (`buildIcsEvent` / `icsFilename` in `src/lib/ics.ts` — all-day
+  `DTSTART;VALUE=DATE`, CRLF, SUMMARY "Company — Job Title", UID
+  `${applicationId}-${date}`) from a button beside each date on the dashboard
+  and in the form. No field names changed; record still has no `attachmentIds`,
+  `deletedAt` stays as the undo window, and the 13th foundation check is untouched.
 
 ---
 

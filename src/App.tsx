@@ -4,20 +4,22 @@ import { ApplicationList } from './components/ApplicationList';
 import { FilterBar } from './components/FilterBar';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SelfTestPanel } from './components/SelfTestPanel';
+import { UpcomingDashboard } from './components/UpcomingDashboard';
 import { saveStagedAttachments } from './lib/attachments';
 import { draftToInput, type ApplicationFormDraft } from './lib/form';
 import { applyQuery, DEFAULT_FILTERS, filterToQuery, type FilterState } from './lib/query';
 import { getStorage } from './lib/storage';
 import type { ApplicationStatus, JobApplication } from './lib/types';
 
-type ViewMode = 'list' | 'board';
+type ViewMode = 'list' | 'board' | 'upcoming';
 
 /**
- * Part 5: file attachments on top of Part 4's list + Kanban board (Part 3) under
- * one search/filter/sort toolbar. The store is read once per change; `applyQuery`
- * derives the visible rows (list) and the match set (board dimming) from the same
- * snapshot, so the two views always agree. All reads/writes still go through
- * `getStorage()` — records via `storage.records`, files via the attachment seam.
+ * Part 7: Upcoming dashboard (due follow-ups + upcoming interviews + per-event
+ * .ics) as a third tab next to Part 4's list + Part 3's Kanban board, all
+ * reading the same store snapshot. The store is read once per change;
+ * `applyQuery` derives the visible rows (list) and the match set (board
+ * dimming); Upcoming ignores the toolbar and answers "what do I need to do
+ * today?". All reads/writes still go through `getStorage()`.
  *
  * Records live in localStorage, files in IndexedDB keyed by application id, so
  * the two are written separately: the record first, then its files (see
@@ -124,7 +126,7 @@ export default function App() {
           <div className="mr-auto">
             <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
             <p className="text-xs text-slate-400">
-              Part 6 of 12 — job links, notes previews, final-result nudge, duplicate check
+              Part 7 of 12 — follow-ups, interview reminders & calendar export
             </p>
           </div>
           <DriverBadge driver={storage.driver} />
@@ -154,6 +156,7 @@ export default function App() {
                 [
                   ['list', 'List View'],
                   ['board', 'Board View'],
+                  ['upcoming', 'Upcoming'],
                 ] as const
               ).map(([mode, label]) => (
                 <button
@@ -171,7 +174,7 @@ export default function App() {
               ))}
             </div>
 
-            <FilterBar rows={rows} filters={filters} onChange={setFilters} />
+            {view !== 'upcoming' ? <FilterBar rows={rows} filters={filters} onChange={setFilters} /> : null}
 
             {view === 'list' ? (
               <ApplicationList
@@ -180,13 +183,15 @@ export default function App() {
                 onRowClick={openEdit}
                 onDelete={(row) => void handleDelete(row)}
               />
-            ) : (
+            ) : view === 'board' ? (
               <KanbanBoard
                 rows={rows}
                 matchIds={matchIds}
                 onStatusChange={(row, status) => void handleStatusChange(row, status)}
                 onCardClick={openEdit}
               />
+            ) : (
+              <UpcomingDashboard rows={rows} onOpen={openEdit} />
             )}
           </>
         )}
