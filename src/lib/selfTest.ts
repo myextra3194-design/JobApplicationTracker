@@ -1,9 +1,10 @@
-import { emptyJobApplication, normalizeJobApplication } from './normalize';
+import { emptyJobApplication, normalizeJobApplication, STORAGE_KEY } from './normalize';
 import { blobToArrayBuffer } from './blob';
 import { isFollowUpDue, toPlainDate, weekKeyOf } from './pipeline';
 import { purgeApplication } from './storage';
 import { IdbAttachmentStore } from './storage/idbAttachmentStore';
 import { corruptKeyFor, LocalRecordStore } from './storage/localRecordStore';
+import { LocalSettingsStore } from './storage/localSettingsStore';
 
 /**
  * Part 1 acceptance harness.
@@ -349,6 +350,28 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       assert(weekKeyOf('2026-08-31') === '2026-08-31', 'the following Monday must start a new week');
       assert(weekKeyOf('not-a-date') === 'not-a-date', 'unparseable dates must pass through, not become NaN');
       return 'Monday-based, so "10 applications this week" means Mon-Sun';
+    }),
+
+    runCheck('settings persist without touching applications', async (store) => {
+      const settingsKey = `${SELF_TEST_PREFIX}settings-isolated`;
+      const settings = new LocalSettingsStore(settingsKey);
+      await settings.clear();
+      const appsBefore = globalThis.localStorage.getItem(store.storageKey);
+      const realAppsBefore = globalThis.localStorage.getItem(STORAGE_KEY);
+      await settings.set({ weeklyGoal: 7 });
+      const read = await settings.get();
+      assert(read.weeklyGoal === 7, `expected weeklyGoal 7, got ${read.weeklyGoal}`);
+      assert(
+        globalThis.localStorage.getItem(store.storageKey) === appsBefore,
+        'settings write must not rewrite the applications document',
+      );
+      assert(
+        globalThis.localStorage.getItem(STORAGE_KEY) === realAppsBefore,
+        'settings write must not touch jat.applications.v1',
+      );
+      await settings.clear();
+      assert(globalThis.localStorage.getItem(settingsKey) === null, 'isolated settings key was not cleaned up');
+      return 'weekly goal round-trips on jat.settings.v1; applications document untouched';
     }),
   ];
 

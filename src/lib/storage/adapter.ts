@@ -78,10 +78,20 @@ export interface AttachmentStore {
   totalBytes(): Promise<number>;
 }
 
+export interface TrackerSettings {
+  weeklyGoal: number;
+}
+
+export interface SettingsStore {
+  get(): Promise<TrackerSettings>;
+  set(patch: Partial<TrackerSettings>): Promise<TrackerSettings>;
+}
+
 export interface TrackerStorage {
   readonly driver: StorageDriver;
   readonly records: RecordStore;
   readonly attachments: AttachmentStore;
+  readonly settings: SettingsStore;
   /** Permanent delete of a record AND its files, so nothing is orphaned. */
   purge(id: string): Promise<void>;
 }
