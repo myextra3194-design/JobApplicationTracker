@@ -58,13 +58,16 @@ worker (`public/sw.js`), so you can install it to your home screen and it starts
 | Files (CVs, screenshots) | `IndexedDB` | db `jat-files`, store `attachments` |
 
 Records are one JSON document `{ version, savedAt, records: [...] }`. Files are stored as
-bytes in IndexedDB because `localStorage` is a string API and cannot hold a PDF. The
-IndexedDB store exists now but stays **inert until Part 5**; files are keyed by
-application id, not by an `attachmentIds` field on the record.
+bytes in IndexedDB because `localStorage` is a string API and cannot hold a PDF. Files are
+keyed by **application id**, not by an `attachmentIds` field on the record — so a record can
+never point at a file that was not stored. Attachments are PDF, DOC or DOCX, up to 5 MB each,
+with a label you type that becomes the download filename.
 
 - **Archive and delete are different things.** `isArchived` hides a row from the board
   but keeps it restorable. `deletedAt` is the undo window between "Delete" and Part 9's
-  "Delete permanently". Files cascade only on permanent delete.
+  "Delete permanently". Files cascade only on permanent delete — and through one
+  function only, `purgeApplication()` in `src/lib/storage/index.ts`, so no code path
+  can delete a record and forget its blobs. Archive and undo-delete keep the files.
 - **Corrupt data is never destroyed.** An unreadable document is copied to
   `jat.applications.v1.corrupt` and the app starts empty instead of throwing.
 - To wipe everything: DevTools → Application → clear site data.
@@ -78,12 +81,14 @@ src/lib/
   pipeline.ts     stage order, terminal stages, follow-up-due rule, week math
   normalize.ts    every read/write passes through here; junk input cannot reach a view
   query.ts        filter/sort/aggregate as pure functions
+  attachments.ts  Part 5 — size/type rules, label→filename, save/download/remove
   blob.ts         byte access with a FileReader fallback
   storage/
     adapter.ts            RecordStore + AttachmentStore interfaces   ← the seam
     localRecordStore.ts   localStorage implementation
-    idbAttachmentStore.ts IndexedDB implementation (inert until Part 5)
-    index.ts              getStorage() — the only place either is chosen
+    idbAttachmentStore.ts IndexedDB implementation (files, keyed by application id)
+    index.ts              getStorage() + purgeApplication() — the only place
+                          either adapter is chosen, and the one cascade path
 ```
 
 **Nothing in the UI touches `localStorage` or `indexedDB` directly.** Components call
@@ -94,9 +99,10 @@ SQLite implementation of the same two interfaces can be swapped in behind
 Named Part 1 helpers (`getAllApplications`, `saveApplication`, `deleteApplication`) are
 thin wrappers over that seam.
 
-`src/lib/selfTest.ts` runs 12 checks against the real storage stack in the browser —
-CRUD, undo-delete, archive, bulk edits, concurrent writes, corrupt-data recovery and a
-byte-exact file round-trip. The home page shows the results; each check uses its own
+`src/lib/selfTest.ts` runs 13 checks against the real storage stack in the browser —
+CRUD, undo-delete, archive, bulk edits, concurrent writes, corrupt-data recovery, a
+byte-exact file round-trip and the attachment cascade (files survive archive and
+undo-delete, and go with the record on permanent delete). The home page shows the results; each check uses its own
 isolated key, so running it never touches your data.
 
 ## Stack
@@ -107,11 +113,13 @@ state, and it lives behind the storage adapter.
 
 ## Status
 
-Parts 1–4 of 12 — foundation, CRUD list, Kanban board, and search/filter/sort. The data
-model, pipeline rules, storage layer, tests and verification harness (Part 1), the list
-view with add/edit/delete (Part 2), the List/Board toggle with the seven-column board and
-per-card status dropdown (Part 3), and the search/filter/sort toolbar over both views —
-the list hides non-matching rows, the board dims them (Part 4) — are in. GitHub Pages
-deploy + PWA installability is in. The spec is
+Parts 1–5 of 12 — foundation, CRUD list, Kanban board, search/filter/sort, and file
+attachments. The data model, pipeline rules, storage layer, tests and verification harness
+(Part 1), the list view with add/edit/delete (Part 2), the List/Board toggle with the
+seven-column board and per-card status dropdown (Part 3), the search/filter/sort toolbar
+over both views — the list hides non-matching rows, the board dims them (Part 4) — and the
+attachment uploader: multiple PDF/DOC/DOCX files per application, a typed label for each,
+5 MB per file with a readable rejection message, and per-file Download/Remove (Part 5) are
+in. GitHub Pages deploy + PWA installability is in. The spec is
 [`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
 progress and locked decisions are in [`PLAN.md`](PLAN.md).

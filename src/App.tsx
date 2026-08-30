@@ -4,6 +4,7 @@ import { ApplicationList } from './components/ApplicationList';
 import { FilterBar } from './components/FilterBar';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SelfTestPanel } from './components/SelfTestPanel';
+import { saveStagedAttachments } from './lib/attachments';
 import { draftToInput, type ApplicationFormDraft } from './lib/form';
 import { applyQuery, DEFAULT_FILTERS, filterToQuery, type FilterState } from './lib/query';
 import { getStorage } from './lib/storage';
@@ -12,10 +13,16 @@ import type { ApplicationStatus, JobApplication } from './lib/types';
 type ViewMode = 'list' | 'board';
 
 /**
- * Part 4: list + Kanban board (Part 3) under one search/filter/sort toolbar.
- * The store is read once per change; `applyQuery` derives the visible rows
- * (list) and the match set (board dimming) from the same snapshot, so the two
- * views always agree. All reads/writes still go through `getStorage()`.
+ * Part 5: file attachments on top of Part 4's list + Kanban board (Part 3) under
+ * one search/filter/sort toolbar. The store is read once per change; `applyQuery`
+ * derives the visible rows (list) and the match set (board dimming) from the same
+ * snapshot, so the two views always agree. All reads/writes still go through
+ * `getStorage()` — records via `storage.records`, files via the attachment seam.
+ *
+ * Records live in localStorage, files in IndexedDB keyed by application id, so
+ * the two are written separately: the record first, then its files (see
+ * `handleSave`). Deletion here is soft — files stay for the undo window, and only
+ * permanent delete (Part 9) cascades them via `purgeApplication`.
  */
 export default function App() {
   const storage = getStorage();
@@ -65,12 +72,17 @@ export default function App() {
   async function handleSave(draft: ApplicationFormDraft) {
     setSaving(true);
     try {
+      // `draftToInput` deliberately excludes draft.files: a record never references
+      // a file (no `attachmentIds` field — files are keyed by application id).
       const input = draftToInput(draft);
-      if (editing) {
-        await storage.records.update(editing.id, input);
-      } else {
-        await storage.records.create(input);
-      }
+      const saved = editing
+        ? await storage.records.update(editing.id, input)
+        : await storage.records.create(input);
+      // Part 5: staged files are written only now that the record has an id to be
+      // keyed to. Saving them earlier would orphan blobs for a row that may never
+      // be created (a validation failure or a closed dialog), and nothing would
+      // ever cascade them away.
+      await saveStagedAttachments(saved.id, draft.files);
       setFormOpen(false);
       setEditing(null);
       await reload();
@@ -93,7 +105,9 @@ export default function App() {
 
   async function handleDelete(row: JobApplication) {
     const label = [row.companyName, row.jobTitle].filter(Boolean).join(' — ') || 'this application';
-    if (!window.confirm(`Delete ${label}?`)) return;
+    // Soft delete: the row is restorable, so its attachments stay put. Files are
+    // only removed by the permanent-delete cascade (Part 9).
+    if (!window.confirm(`Delete ${label}? Attached files are kept until it is permanently deleted.`)) return;
     try {
       await storage.records.remove(row.id);
       await reload();
@@ -109,7 +123,9 @@ export default function App() {
           <div className="flex size-9 items-center justify-center rounded-lg bg-blue-500/15 text-lg">📋</div>
           <div className="mr-auto">
             <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
-            <p className="text-xs text-slate-400">Part 4 of 12 — list, board, search, filters, sort</p>
+            <p className="text-xs text-slate-400">
+              Part 5 of 12 — list, board, search, filters, sort, attachments
+            </p>
           </div>
           <DriverBadge driver={storage.driver} />
           <button

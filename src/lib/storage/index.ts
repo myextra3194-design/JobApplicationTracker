@@ -26,6 +26,33 @@ function buildRest(): never {
   );
 }
 
+/**
+ * THE ONE CASCADE PATH — Part 5.
+ *
+ * Permanent delete must take the record *and* its files, in that order, and it is
+ * the only place in the app that does. Extracted (rather than inlined in `purge`)
+ * so the self-test can run this exact function against isolated stores: a second
+ * cascade written later would silently be the one that forgets a step, and files
+ * keyed by application id are invisible to a record-only delete.
+ *
+ * Files first, record second: if the file write fails the record survives and can
+ * be retried, whereas the reverse would leave blobs nobody can ever reach again.
+ *
+ * Soft delete (`records.remove`) and archive (`records.setArchived`) deliberately
+ * do NOT go through here — files stay for the undo window, and PLAN.md is explicit
+ * that archive is never permanent delete.
+ */
+export async function purgeApplication(
+  id: string,
+  stores: {
+    records: Pick<RecordStore, 'all' | 'replaceAll'>;
+    attachments: Pick<AttachmentStore, 'removeAllFor'>;
+  },
+): Promise<void> {
+  await stores.attachments.removeAllFor(id);
+  await stores.records.replaceAll((await stores.records.all()).filter((r) => r.id !== id));
+}
+
 export function getStorage(): TrackerStorage {
   if (cache) return cache;
 
@@ -39,13 +66,8 @@ export function getStorage(): TrackerStorage {
     driver: 'local',
     records,
     attachments,
-    async purge(id: string): Promise<void> {
-      // Files are keyed by application id (Part 5). Cascade only on permanent delete.
-      // The IndexedDB store is inert until then; calling removeAllFor is still the
-      // one path so Part 5 cannot grow a second cascade.
-      await attachments.removeAllFor(id);
-      await records.replaceAll((await records.all()).filter((r) => r.id !== id));
-    },
+    // Files are keyed by application id (Part 5). Cascade only on permanent delete.
+    purge: (id: string) => purgeApplication(id, { records, attachments }),
   };
   return cache;
 }
