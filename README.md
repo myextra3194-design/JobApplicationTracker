@@ -113,13 +113,15 @@ state, and it lives behind the storage adapter.
 
 ## Status
 
-Parts 1–5 of 12 — foundation, CRUD list, Kanban board, search/filter/sort, and file
-attachments. The data model, pipeline rules, storage layer, tests and verification harness
-(Part 1), the list view with add/edit/delete (Part 2), the List/Board toggle with the
-seven-column board and per-card status dropdown (Part 3), the search/filter/sort toolbar
-over both views — the list hides non-matching rows, the board dims them (Part 4) — and the
-attachment uploader: multiple PDF/DOC/DOCX files per application, a typed label for each,
-5 MB per file with a readable rejection message, and per-file Download/Remove (Part 5) are
-in. GitHub Pages deploy + PWA installability is in. The spec is
+Parts 1–9 of 12 are in. The data model, storage seam and verification harness (Part 1);
+the add/edit list view (Part 2); the List/Board toggle with the seven-column Kanban board
+(Part 3); search/filter/sort over both views (Part 4); PDF/DOC/DOCX attachments keyed by
+application id with a per-file 5 MB limit (Part 5); clickable job links, notes/research
+previews, the final-result nudge and the duplicate warning (Part 6); the Upcoming
+follow-up/interview dashboard with per-event `.ics` (Part 7); the analytics dashboard and
+Monday-based weekly goal (Part 8); and **archive, restore & permanent delete** (Part 9) —
+the list's Delete is now Archive, an Archived tab offers Restore and "Delete permanently"
+(which cascades the attachments via `getStorage().purge`), and an "N archived" count sits
+beside the filters. GitHub Pages deploy + PWA installability is in. The spec is
 [`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
 progress and locked decisions are in [`PLAN.md`](PLAN.md).

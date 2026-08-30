@@ -59,7 +59,7 @@ wins except for the locked decisions below.
 - Data is per browser install: phone ≠ desktop ≠ iPhone-home-screen-app. Sync is out
   of scope until Part 11's export/import; nobody should plan on cross-device
   continuity.
-- Repo state check (2026-08-30): this checkout contains **Parts 1–8**. Part 3 was
+- Repo state check (2026-08-30): this checkout contains **Parts 1–9**. Part 3 was
   rebuilt to spec after the old board branch was found never merged: List/Board
   toggle at the top of the page, the seven columns in pipeline order, non-archived
   only, and status change via a dropdown on the card (no drag-and-drop) — same
@@ -93,6 +93,18 @@ wins except for the locked decisions below.
   `${applicationId}-${date}`) from a button beside each date on the dashboard
   and in the form. No field names changed; record still has no `attachmentIds`,
   `deletedAt` stays as the undo window, and the 13th foundation check is untouched.
+  Part 8 is in: the analytics dashboard (`AnalyticsPanel` on the Upcoming tab) —
+  total active, breakdown by status, response rate, portal breakdown, per-week and
+  per-month submission bars, and the Monday-based weekly goal (Part 8's `weekKeyOf`
+  / `applicationsByWeek` / `applicationsByMonth`, persisted via `SettingsStore`).
+  Part 9 is in: the list's Delete became **Archive** (exact plan copy
+  "Archive this application? You can restore it later from the Archived tab."),
+  an **Archived** tab (`ArchivedList` + `src/lib/archive.ts`) with Restore and
+  "Delete permanently", and an "N archived" count beside the filters. Archive and
+  soft delete still never touch files — only permanent delete cascades, through
+  the one `getStorage().purge` → `purgeApplication` path. No field names changed;
+  `isArchived` stays boolean, no `attachmentIds`, `deletedAt` stays the undo window,
+  and the self-test is still 14 checks.
 
 ---
 

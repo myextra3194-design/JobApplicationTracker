@@ -7,14 +7,15 @@ interface ApplicationListProps {
   /** True when rows is the search/filter result rather than the whole collection. */
   filtered?: boolean;
   onRowClick: (row: JobApplication) => void;
-  onDelete: (row: JobApplication) => void;
+  /** Part 9: the list archives instead of deleting — restore lives on the Archived tab. */
+  onArchive: (row: JobApplication) => void;
 }
 
 function dash(value: string | null): string {
   return value ? value : '—';
 }
 
-export function ApplicationList({ rows, filtered = false, onRowClick, onDelete }: ApplicationListProps) {
+export function ApplicationList({ rows, filtered = false, onRowClick, onArchive }: ApplicationListProps) {
   if (rows.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-hairline bg-surface px-4 py-10 text-center text-sm text-slate-400">
@@ -109,11 +110,11 @@ export function ApplicationList({ rows, filtered = false, onRowClick, onDelete }
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
-                    onDelete(row);
+                    onArchive(row);
                   }}
                   className="rounded-md px-2 py-1 text-xs text-red-400 hover:bg-red-500/10"
                 >
-                  Delete
+                  Archive
                 </button>
               </td>
             </tr>

@@ -1,30 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApplicationForm } from './components/ApplicationForm';
 import { ApplicationList } from './components/ApplicationList';
+import { ArchivedList } from './components/ArchivedList';
 import { FilterBar } from './components/FilterBar';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SelfTestPanel } from './components/SelfTestPanel';
 import { UpcomingDashboard } from './components/UpcomingDashboard';
+import { archivedRows, countArchived } from './lib/archive';
 import { saveStagedAttachments } from './lib/attachments';
 import { draftToInput, type ApplicationFormDraft } from './lib/form';
 import { applyQuery, DEFAULT_FILTERS, filterToQuery, type FilterState } from './lib/query';
 import { getStorage } from './lib/storage';
 import type { ApplicationStatus, JobApplication } from './lib/types';
 
-type ViewMode = 'list' | 'board' | 'upcoming';
+type ViewMode = 'list' | 'board' | 'upcoming' | 'archived';
 
 /**
- * Part 7: Upcoming dashboard (due follow-ups + upcoming interviews + per-event
- * .ics) as a third tab next to Part 4's list + Part 3's Kanban board, all
- * reading the same store snapshot. The store is read once per change;
- * `applyQuery` derives the visible rows (list) and the match set (board
- * dimming); Upcoming ignores the toolbar and answers "what do I need to do
- * today?". All reads/writes still go through `getStorage()`.
+ * Part 9: archive, restore & permanent delete. The list's Delete became
+ * Archive (with the plan's exact "restore it later from the Archived tab"
+ * confirmation), and an Archived tab shows those rows with Restore and
+ * "Delete permanently" — the one action that removes the record AND its files,
+ * via `getStorage().purge`. An "N archived" count sits next to the filters.
  *
- * Records live in localStorage, files in IndexedDB keyed by application id, so
- * the two are written separately: the record first, then its files (see
- * `handleSave`). Deletion here is soft — files stay for the undo window, and only
- * permanent delete (Part 9) cascades them via `purgeApplication`.
+ * The store snapshot is now `records.all()` so both the live rows and the
+ * archived rows come from one read; `applyQuery` derives the visible list and
+ * the board's match set, `archivedRows` feeds the Archived tab. Archive and
+ * soft delete never touch files — only `purge` cascades them.
  */
 export default function App() {
   const storage = getStorage();
@@ -38,7 +39,9 @@ export default function App() {
 
   const reload = useCallback(async () => {
     try {
-      const list = await storage.records.list();
+      // Part 9: everything, unfiltered — the live rows, the archived rows and
+      // the "N archived" count all come from this one snapshot.
+      const list = await storage.records.all();
       setRows(list);
       setLoadError(null);
     } catch (err) {
@@ -54,6 +57,13 @@ export default function App() {
   // the filtered+sorted rows, the board dims the rows that did not match.
   const listRows = rows === null ? [] : applyQuery(rows, filterToQuery(filters));
   const matchIds = new Set(listRows.map((r) => r.id));
+
+  // Live rows (non-archived, non-deleted, most recently updated first) feed the
+  // board, the Upcoming dashboard and the filter option lists. Archived rows
+  // feed the Archived tab and the "N archived" count.
+  const liveRows = rows === null ? [] : applyQuery(rows, {});
+  const archived = rows === null ? [] : archivedRows(rows);
+  const archivedCount = rows === null ? 0 : countArchived(rows);
 
   function openAdd() {
     setEditing(null);
@@ -105,13 +115,39 @@ export default function App() {
     }
   }
 
-  async function handleDelete(row: JobApplication) {
-    const label = [row.companyName, row.jobTitle].filter(Boolean).join(' — ') || 'this application';
-    // Soft delete: the row is restorable, so its attachments stay put. Files are
-    // only removed by the permanent-delete cascade (Part 9).
-    if (!window.confirm(`Delete ${label}? Attached files are kept until it is permanently deleted.`)) return;
+  async function handleArchive(row: JobApplication) {
+    // The plan's exact, non-permanent wording: archive is reversible, and the
+    // Archived tab is where it comes back. Files are untouched.
+    if (!window.confirm('Archive this application? You can restore it later from the Archived tab.')) return;
     try {
-      await storage.records.remove(row.id);
+      await storage.records.setArchived(row.id, true);
+      await reload();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleRestore(row: JobApplication) {
+    try {
+      await storage.records.setArchived(row.id, false);
+      await reload();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleDeletePermanent(row: JobApplication) {
+    const label = [row.companyName, row.jobTitle].filter(Boolean).join(' — ') || 'this application';
+    if (
+      !window.confirm(
+        `Delete ${label} permanently? This removes the record and its attachments — it cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      // THE one cascade path: record + files, via purgeApplication.
+      await storage.purge(row.id);
       await reload();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
@@ -126,7 +162,7 @@ export default function App() {
           <div className="mr-auto">
             <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
             <p className="text-xs text-slate-400">
-              Part 8 of 12 — analytics dashboard & weekly goal tracker
+              Part 9 of 12 — archive, restore &amp; permanent delete
             </p>
           </div>
           <DriverBadge driver={storage.driver} />
@@ -157,6 +193,7 @@ export default function App() {
                   ['list', 'List View'],
                   ['board', 'Board View'],
                   ['upcoming', 'Upcoming'],
+                  ['archived', 'Archived'],
                 ] as const
               ).map(([mode, label]) => (
                 <button
@@ -174,24 +211,42 @@ export default function App() {
               ))}
             </div>
 
-            {view !== 'upcoming' ? <FilterBar rows={rows} filters={filters} onChange={setFilters} /> : null}
+            {view === 'list' || view === 'board' ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <FilterBar rows={liveRows} filters={filters} onChange={setFilters} />
+                <button
+                  type="button"
+                  onClick={() => setView('archived')}
+                  title="View the Archived tab"
+                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:border-sky-500/50 hover:text-slate-100"
+                >
+                  {archivedCount} archived
+                </button>
+              </div>
+            ) : null}
 
             {view === 'list' ? (
               <ApplicationList
                 rows={listRows}
-                filtered={rows.length > 0}
+                filtered={liveRows.length > 0}
                 onRowClick={openEdit}
-                onDelete={(row) => void handleDelete(row)}
+                onArchive={(row) => void handleArchive(row)}
               />
             ) : view === 'board' ? (
               <KanbanBoard
-                rows={rows}
+                rows={liveRows}
                 matchIds={matchIds}
                 onStatusChange={(row, status) => void handleStatusChange(row, status)}
                 onCardClick={openEdit}
               />
+            ) : view === 'upcoming' ? (
+              <UpcomingDashboard rows={liveRows} onOpen={openEdit} />
             ) : (
-              <UpcomingDashboard rows={rows} onOpen={openEdit} />
+              <ArchivedList
+                rows={archived}
+                onRestore={(row) => void handleRestore(row)}
+                onDeletePermanent={(row) => void handleDeletePermanent(row)}
+              />
             )}
           </>
         )}
@@ -209,7 +264,7 @@ export default function App() {
       <ApplicationForm
         open={formOpen}
         initial={editing}
-        liveRows={rows ?? []}
+        liveRows={liveRows}
         saving={saving}
         onClose={closeForm}
         onSave={handleSave}
