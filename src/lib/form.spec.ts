@@ -90,3 +90,28 @@ describe('draft <-> record', () => {
     expect(input.jobLink).toBe('https://example.com/job');
   });
 });
+
+describe('Part 5: draft.files is form state, never record input', () => {
+  it('defaults to an empty list and stays out of emptyFormDraft equality surprises', () => {
+    expect(emptyFormDraft().files).toEqual([]);
+    expect(emptyFormDraft().files).not.toBe(emptyFormDraft().files); // fresh array each call
+  });
+
+  it('is dropped by draftToInput, so a record can never reference a file', () => {
+    const draft = { ...emptyFormDraft(), companyName: 'Acme', jobTitle: 'Engineer' };
+    draft.files = [
+      { key: 'k1', label: 'Resume', file: { name: 'cv.pdf', size: 12 } as unknown as File },
+    ];
+    const input = draftToInput(draft);
+    expect(Object.keys(input)).not.toContain('files');
+    expect(Object.keys(input)).not.toContain('attachmentIds');
+    // Everything else still round-trips.
+    expect(input.companyName).toBe('Acme');
+    expect(input.status).toBe('Saved');
+  });
+
+  it('is not read back from a record — existing files come from the attachment store', () => {
+    const app = emptyJobApplication({ companyName: 'Acme', jobTitle: 'Engineer' });
+    expect(applicationToDraft(app).files).toEqual([]);
+  });
+});

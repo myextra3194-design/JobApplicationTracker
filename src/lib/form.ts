@@ -1,3 +1,4 @@
+import type { StagedAttachment } from './attachments';
 import type { ApplicationStatus, JobApplication, NewJobApplication } from './types';
 
 /** Editable fields for the Part 2 add/edit form. Dates are `YYYY-MM-DD` or ''. */
@@ -21,6 +22,14 @@ export interface ApplicationFormDraft {
   finalResult: string;
   matchScore: string;
   cvVersionUsed: string;
+  /**
+   * Part 5: files picked in this form session that are not saved yet. In-memory
+   * only — `draftToInput` deliberately drops them, so files never enter the record
+   * and a cancelled form leaves no orphaned blob (files are keyed by application
+   * id; PLAN.md has no `attachmentIds` field). Already-saved files are read from
+   * the attachment store by the form, not held here.
+   */
+  files: StagedAttachment[];
 }
 
 export interface FormErrors {
@@ -49,6 +58,7 @@ export function emptyFormDraft(): ApplicationFormDraft {
     finalResult: 'Pending',
     matchScore: '',
     cvVersionUsed: '',
+    files: [],
   };
 }
 
@@ -73,6 +83,8 @@ export function applicationToDraft(app: JobApplication): ApplicationFormDraft {
     finalResult: app.finalResult,
     matchScore: app.matchScore == null ? '' : String(app.matchScore),
     cvVersionUsed: app.cvVersionUsed ?? '',
+    // Existing files are not part of the record, so they cannot be read from it.
+    files: [],
   };
 }
 
@@ -81,6 +93,11 @@ function blankToNull(value: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+/**
+ * Record input only. `draft.files` is intentionally absent: files live in the
+ * attachment store keyed by application id and are written after the record has
+ * one, so a record never carries a reference to a file (no `attachmentIds`).
+ */
 export function draftToInput(draft: ApplicationFormDraft): NewJobApplication {
   const scoreRaw = draft.matchScore.trim();
   const score = scoreRaw === '' ? null : Number(scoreRaw);

@@ -32,6 +32,15 @@ wins except for the locked decisions below.
 - Files cascade from IndexedDB only on permanent delete, via
   `attachments.removeAllFor(applicationId)`. There is no `attachmentIds` field
   on the record; Part 5 keys files by application id.
+- **One cascade path.** `purgeApplication(id, { records, attachments })` in
+  `src/lib/storage/index.ts` is the only code that deletes a record and its files,
+  and `getStorage().purge` is a one-line call to it. Part 5 grew no second delete
+  path; the 13th foundation check runs this exact function against isolated
+  stores, so a future cascade that forgets the files fails the harness rather than
+  silently leaking storage.
+- Soft delete (`records.remove`) and archive (`records.setArchived`) never touch
+  files — the undo window has to bring the CV back with the row. Part 9's
+  permanent delete is what calls `purgeApplication`.
 - Deployment: GitHub Pages, **"Deploy from a branch" → `<branch>` → `/docs`**.
   Pages' branch source only offers `/` or `/docs` (never `/dist`), so `docs/` is a
   committed byte-identical mirror of the built `dist/`, and every commit that
@@ -50,7 +59,7 @@ wins except for the locked decisions below.
 - Data is per browser install: phone ≠ desktop ≠ iPhone-home-screen-app. Sync is out
   of scope until Part 11's export/import; nobody should plan on cross-device
   continuity.
-- Repo state check (2026-08-29): this checkout contains **Parts 1–4**. Part 3 was
+- Repo state check (2026-08-30): this checkout contains **Parts 1–5**. Part 3 was
   rebuilt to spec after the old board branch was found never merged: List/Board
   toggle at the top of the page, the seven columns in pipeline order, non-archived
   only, and status change via a dropdown on the card (no drag-and-drop) — same
@@ -59,6 +68,11 @@ wins except for the locked decisions below.
   which gained the multi-tag `tags`, the `jobPortal` filter and the `interviewDate`
   sort key (extended, not duplicated). One toolbar drives both views: the list
   hides non-matching rows, the board dims them and does not sort.
+  Part 5's attachments are in: IndexedDB blobs keyed by application id, an
+  "Attach resume/CV" upload in the add/edit form (PDF/DOC/DOCX, 5 MB per file,
+  multiple files each with a label you type), a per-file Download/Remove on the
+  saved list, and the 13th foundation check. Staged files are written only after
+  the record has an id, so a cancelled form never orphans a blob.
 
 ---
 
@@ -93,16 +107,24 @@ via `getStorage()`:
 
 ---
 
-## Three defensible deviations from Part 1's wording
+## Defensible deviations from the spec's wording
 
 1. **TypeScript, not JavaScript.** Strict + `noUncheckedIndexedAccess`. The plan
    said "JavaScript object/type"; the type is the contract.
 2. **The home page runs a verification harness** instead of the plan's "plain
    unstyled list of field names" placeholder. CRUD screens start in Part 2.
-3. **The IndexedDB attachment store exists ahead of Part 5 but is inert.** The
-   seam and the byte-exact self-test are real; nothing in the UI calls it yet.
-   `purge()` already cascades via `attachments.removeAllFor(applicationId)` so
-   Part 5 does not grow a second delete path.
+3. **The IndexedDB attachment store shipped in Part 1, ahead of the UI that uses
+   it.** The seam and the byte-exact self-test were real from the start; Part 5
+   switched the UI on without inventing persistence. `purge()` already cascaded
+   via `attachments.removeAllFor(applicationId)`, so Part 5 grew no second delete
+   path. (Recorded here because it front-loaded work the spec orders later; as of
+   Part 5 the store is live, not inert.)
+4. **Attachment validation lives in `src/lib/attachments.ts`, not the component.**
+   `inspectAttachmentFile` takes `{ name, size }` rather than a `File`, so the
+   5 MB / PDF-DOC-DOCX rule and its exact copy are unit-testable in plain node and
+   the form cannot drift from the message the tests assert. `downloadNameFor`
+   derives the stored filename from the label the user types, which is why
+   "Download" hands back `Resume.pdf` instead of `cv_final_v3.pdf`.
 
 ---
 

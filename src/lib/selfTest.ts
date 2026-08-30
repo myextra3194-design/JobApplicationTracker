@@ -1,6 +1,7 @@
 import { emptyJobApplication, normalizeJobApplication } from './normalize';
 import { blobToArrayBuffer } from './blob';
 import { isFollowUpDue, toPlainDate, weekKeyOf } from './pipeline';
+import { purgeApplication } from './storage';
 import { IdbAttachmentStore } from './storage/idbAttachmentStore';
 import { corruptKeyFor, LocalRecordStore } from './storage/localRecordStore';
 
@@ -10,7 +11,8 @@ import { corruptKeyFor, LocalRecordStore } from './storage/localRecordStore';
  * The foundation is only done when persistence actually round-trips, so instead of
  * trusting the code by eye this runs the real adapter in the real browser: CRUD,
  * hide-on-delete, undo, archive, bulk edit, corrupt-data recovery, concurrent
- * writes and a Blob round-trip through IndexedDB.
+ * writes, a Blob round-trip through IndexedDB and the attachment cascade that
+ * Part 5 depends on.
  *
  * Each check gets its own localStorage key, because they run concurrently —
  * sharing one document would let `replaceAll` in one check clear another's rows.
@@ -291,6 +293,53 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       assert((await attachments.removeAllFor(attachmentAppId)) === 1, 'cascade delete removed the wrong count');
       assert((await attachments.listFor(attachmentAppId)).length === 0, 'attachment survived cascade delete');
       return `${bytes.length} bytes written, verified byte-for-byte, then deleted`;
+    }),
+
+    runCheck('permanent delete cascades files, soft delete keeps them', async (store) => {
+      if (typeof indexedDB === 'undefined') throw new SkipError('indexedDB unavailable in this context');
+      const record = await store.create({ companyName: `Sample Cascade Co ${SAMPLE}` });
+      const payload = new TextEncoder().encode('%PDF-1.4 cascade probe');
+      for (const name of ['Resume.pdf', 'CoverLetter.docx']) {
+        await attachments.add({
+          applicationId: record.id,
+          name,
+          blob: new Blob([payload], { type: 'application/pdf' }),
+        });
+      }
+      assert((await attachments.listFor(record.id)).length === 2, 'the probe files were not stored');
+
+      // Archive is not delete: the row is restorable, so its files must survive it.
+      await store.setArchived(record.id, true);
+      assert((await attachments.listFor(record.id)).length === 2, 'archive must not cascade files');
+
+      // Soft delete is the undo window between "Delete" and Part 9's "Delete
+      // permanently". Undo has to bring the CV back with the row.
+      await store.remove(record.id);
+      assert((await attachments.listFor(record.id)).length === 2, 'soft delete must keep files for undo');
+      await store.restore(record.id);
+      assert((await store.get(record.id)) !== null, 'restore did not bring the record back');
+
+      // THE ONE CASCADE PATH. Same function `getStorage().purge` calls, so this
+      // check is testing the code path the app actually takes, not a copy of it.
+      await purgeApplication(record.id, { records: store, attachments });
+      assert((await store.get(record.id)) === null, 'purge left the record behind');
+      assert((await attachments.listFor(record.id)).length === 0, 'purge orphaned the files');
+
+      // A sibling record's files must be untouched: the cascade keys by id.
+      const other = await store.create({ companyName: `Sample Neighbour Co ${SAMPLE}` });
+      await attachments.add({
+        applicationId: other.id,
+        name: 'Untouched.pdf',
+        blob: new Blob([payload], { type: 'application/pdf' }),
+      });
+      assert((await attachments.listFor(other.id)).length === 1, 'neighbouring files were not stored');
+      await purgeApplication(record.id, { records: store, attachments });
+      assert((await attachments.listFor(other.id)).length === 1, 'cascade deleted another record\'s files');
+      await purgeApplication(other.id, { records: store, attachments });
+      assert((await store.get(other.id)) === null, 'purge left the neighbouring record behind');
+      assert((await attachments.listFor(other.id)).length === 0, 'purge orphaned the neighbouring files');
+
+      return 'archive and soft delete keep files; permanent delete takes record + files, one id at a time';
     }),
 
     runCheck('week key groups applications for the goal tracker', () => {
