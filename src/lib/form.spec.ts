@@ -5,7 +5,9 @@ import {
   applicationToDraft,
   draftToInput,
   emptyFormDraft,
+  finalResultIsFilled,
   formHasErrors,
+  needsFinalResultNudge,
   removeTag,
   validateApplicationForm,
 } from './form';
@@ -113,5 +115,26 @@ describe('Part 5: draft.files is form state, never record input', () => {
   it('is not read back from a record — existing files come from the attachment store', () => {
     const app = emptyJobApplication({ companyName: 'Acme', jobTitle: 'Engineer' });
     expect(applicationToDraft(app).files).toEqual([]);
+  });
+});
+
+describe('Part 6: final-result nudge rule', () => {
+  it('treats blank and the Pending default as "not filled in", any casing', () => {
+    expect(finalResultIsFilled('')).toBe(false);
+    expect(finalResultIsFilled('   ')).toBe(false);
+    expect(finalResultIsFilled('Pending')).toBe(false);
+    expect(finalResultIsFilled(' pending ')).toBe(false);
+    expect(finalResultIsFilled('Hired')).toBe(true);
+    expect(finalResultIsFilled('ghosted')).toBe(true);
+    expect(finalResultIsFilled('Withdrew after offer')).toBe(true);
+  });
+
+  it('nudges only Rejected/Withdrawn while the final result is not filled in', () => {
+    expect(needsFinalResultNudge('Rejected', 'Pending')).toBe(true);
+    expect(needsFinalResultNudge('Withdrawn', '')).toBe(true);
+    expect(needsFinalResultNudge('Rejected', 'Hired')).toBe(false);
+    expect(needsFinalResultNudge('Withdrawn', 'Withdrew after offer')).toBe(false);
+    expect(needsFinalResultNudge('Offer', 'Pending')).toBe(false);
+    expect(needsFinalResultNudge('Applied', 'Pending')).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import { STATUS_TONE } from '../lib/pipeline';
+import { previewText } from '../lib/preview';
 import type { JobApplication } from '../lib/types';
 
 interface ApplicationListProps {
@@ -31,10 +32,13 @@ export function ApplicationList({ rows, filtered = false, onRowClick, onDelete }
           <tr>
             <th className="px-3 py-2 font-medium">Company</th>
             <th className="px-3 py-2 font-medium">Job Title</th>
+            <th className="px-3 py-2 font-medium">Job Link</th>
             <th className="px-3 py-2 font-medium">Status</th>
             <th className="px-3 py-2 font-medium">Applied Date</th>
             <th className="px-3 py-2 font-medium">Follow-up Date</th>
             <th className="px-3 py-2 font-medium">Interview Date</th>
+            <th className="px-3 py-2 font-medium">Notes</th>
+            <th className="px-3 py-2 font-medium">Company Research</th>
             <th className="px-3 py-2 font-medium">Tags</th>
             <th className="px-3 py-2 font-medium">
               <span className="sr-only">Actions</span>
@@ -51,6 +55,23 @@ export function ApplicationList({ rows, filtered = false, onRowClick, onDelete }
               <td className="px-3 py-2 font-medium text-slate-100">{row.companyName || '—'}</td>
               <td className="px-3 py-2 text-slate-300">{row.jobTitle || '—'}</td>
               <td className="px-3 py-2">
+                {row.jobLink ? (
+                  <a
+                    href={row.jobLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={row.jobLink}
+                    onClick={(event) => event.stopPropagation()}
+                    className="inline-flex items-center gap-1 rounded-md border border-hairline bg-surface-raised px-2 py-1 text-xs text-sky-300 hover:border-sky-500/50 hover:text-sky-200"
+                  >
+                    Open posting
+                    <span aria-hidden>↗</span>
+                  </a>
+                ) : (
+                  <span className="text-slate-600">—</span>
+                )}
+              </td>
+              <td className="px-3 py-2">
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[row.status].chip}`}
                 >
@@ -61,6 +82,12 @@ export function ApplicationList({ rows, filtered = false, onRowClick, onDelete }
               <td className="px-3 py-2 font-mono text-xs text-slate-400">{dash(row.applicationDate)}</td>
               <td className="px-3 py-2 font-mono text-xs text-slate-400">{dash(row.followUpDate)}</td>
               <td className="px-3 py-2 font-mono text-xs text-slate-400">{dash(row.interviewDate)}</td>
+              <td className="px-3 py-2 text-xs text-slate-400">
+                {previewText(row.notes) || <span className="text-slate-600">—</span>}
+              </td>
+              <td className="px-3 py-2 text-xs text-slate-400">
+                {previewText(row.companyResearch) || <span className="text-slate-600">—</span>}
+              </td>
               <td className="px-3 py-2">
                 <div className="flex flex-wrap gap-1">
                   {row.tags.length === 0 ? (

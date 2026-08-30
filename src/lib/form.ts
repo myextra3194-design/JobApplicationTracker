@@ -135,6 +135,24 @@ export function formHasErrors(errors: FormErrors): boolean {
   return Boolean(errors.companyName || errors.jobTitle);
 }
 
+/**
+ * Part 6: the normaliser defaults finalResult to 'Pending' when blank, so the
+ * record is never literally ''. Blank or the default counts as "not filled in"
+ * — that rule lives here so the nudge can never drift from its tests.
+ */
+export function finalResultIsFilled(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed !== '' && trimmed.toLowerCase() !== 'pending';
+}
+
+/**
+ * Gentle inline guidance, never a block: when the status is Rejected or
+ * Withdrawn and the final result is still not filled in, suggest filling it.
+ */
+export function needsFinalResultNudge(status: ApplicationStatus, finalResult: string): boolean {
+  return (status === 'Rejected' || status === 'Withdrawn') && !finalResultIsFilled(finalResult);
+}
+
 /** Type a tag and press Enter. Blank and case-insensitive duplicates are ignored. */
 export function addTag(tags: readonly string[], raw: string): string[] {
   const tag = raw.trim();

@@ -124,7 +124,7 @@ export default function App() {
           <div className="mr-auto">
             <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
             <p className="text-xs text-slate-400">
-              Part 5 of 12 — list, board, search, filters, sort, attachments
+              Part 6 of 12 — job links, notes previews, final-result nudge, duplicate check
             </p>
           </div>
           <DriverBadge driver={storage.driver} />
@@ -204,6 +204,7 @@ export default function App() {
       <ApplicationForm
         open={formOpen}
         initial={editing}
+        liveRows={rows ?? []}
         saving={saving}
         onClose={closeForm}
         onSave={handleSave}
