@@ -22,6 +22,7 @@ import {
   type ApplicationFormDraft,
 } from '../lib/form';
 import type { AttachmentMeta } from '../lib/storage/adapter';
+import { downloadDateAsIcs } from '../lib/ics';
 import {
   FINAL_RESULT_SUGGESTIONS,
   INTERVIEW_STATUS_SUGGESTIONS,
@@ -292,22 +293,22 @@ export function ApplicationForm({
                 placeholder="email or phone"
               />
             </Field>
-            <Field label="Follow-up date">
-              <input
-                type="date"
-                value={draft.followUpDate}
-                onChange={(e) => patch('followUpDate', e.target.value)}
-                className={inputClass()}
-              />
-            </Field>
-            <Field label="Interview date">
-              <input
-                type="date"
-                value={draft.interviewDate}
-                onChange={(e) => patch('interviewDate', e.target.value)}
-                className={inputClass()}
-              />
-            </Field>
+            <DateWithCalendar
+              label="Follow-up date"
+              value={draft.followUpDate}
+              onChange={(value) => patch('followUpDate', value)}
+              companyName={draft.companyName}
+              jobTitle={draft.jobTitle}
+              applicationId={initial?.id}
+            />
+            <DateWithCalendar
+              label="Interview date"
+              value={draft.interviewDate}
+              onChange={(value) => patch('interviewDate', value)}
+              companyName={draft.companyName}
+              jobTitle={draft.jobTitle}
+              applicationId={initial?.id}
+            />
             <Field label="Interview status">
               <input
                 value={draft.interviewStatus}
@@ -553,6 +554,52 @@ export function ApplicationForm({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Date input plus an "Add to calendar" button that only appears when the date
+ * is set. Not a `<label>` wrapping the button — clicking the download must not
+ * also focus the date picker.
+ */
+function DateWithCalendar({
+  label,
+  value,
+  onChange,
+  companyName,
+  jobTitle,
+  applicationId,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  companyName: string;
+  jobTitle: string;
+  applicationId?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1 text-xs text-slate-400">
+      <span>{label}</span>
+      <div className="flex items-center gap-2">
+        <input type="date" value={value} onChange={(e) => onChange(e.target.value)} className={inputClass()} />
+        {value ? (
+          <button
+            type="button"
+            onClick={() =>
+              downloadDateAsIcs({
+                companyName,
+                jobTitle,
+                date: value,
+                uid: applicationId ? `${applicationId}-${value}` : undefined,
+              })
+            }
+            className="shrink-0 rounded-md border border-hairline px-2 py-1.5 text-xs text-slate-300 hover:bg-surface-raised hover:text-slate-100"
+          >
+            Add to calendar
+          </button>
+        ) : null}
       </div>
     </div>
   );
