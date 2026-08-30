@@ -8,6 +8,13 @@ import { SelfTestPanel } from './components/SelfTestPanel';
 import { UpcomingDashboard } from './components/UpcomingDashboard';
 import { archivedRows, countArchived } from './lib/archive';
 import { saveStagedAttachments } from './lib/attachments';
+import {
+  bulkArchiveConfirm,
+  bulkPurgeConfirm,
+  mergeTagIntoTags,
+  rowsToChangeStatus,
+  rowsToTag,
+} from './lib/bulk';
 import { draftToInput, type ApplicationFormDraft } from './lib/form';
 import { applyQuery, DEFAULT_FILTERS, filterToQuery, type FilterState } from './lib/query';
 import { getStorage } from './lib/storage';
@@ -26,6 +33,11 @@ type ViewMode = 'list' | 'board' | 'upcoming' | 'archived';
  * archived rows come from one read; `applyQuery` derives the visible list and
  * the board's match set, `archivedRows` feeds the Archived tab. Archive and
  * soft delete never touch files — only `purge` cascades them.
+ *
+ * Part 10 adds multi-select to both tables: bulk status/tag/archive on the
+ * live list (status/tag everywhere, archive confirmed with its count), and
+ * bulk permanent delete on the Archived tab — `bulkPurge` loops the one
+ * `purgeApplication` cascade rather than growing a second delete path.
  */
 export default function App() {
   const storage = getStorage();
@@ -154,6 +166,80 @@ export default function App() {
     }
   }
 
+  // --- Part 10: bulk actions. Each applies to every ticked row, reloads the
+  // snapshot, and returns whether the selection should be cleared (false on a
+  // declined confirmation or a failed write, so the user's ticks survive). ---
+
+  async function handleBulkStatus(ids: readonly string[], status: ApplicationStatus): Promise<boolean> {
+    if (rows === null) return false;
+    // Skip rows already in that stage: no pointless updatedAt stamps.
+    const targets = rowsToChangeStatus(
+      rows.filter((r) => ids.includes(r.id)),
+      status,
+    );
+    if (targets.length === 0) return true;
+    try {
+      await storage.records.bulkPatch(
+        targets.map((r) => r.id),
+        { status },
+      );
+      await reload();
+      return true;
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  }
+
+  async function handleBulkTag(ids: readonly string[], tag: string): Promise<boolean> {
+    if (rows === null || !tag.trim()) return false;
+    // Per-row merge: a bulk tag appends to each row's existing tags (case-
+    // insensitive dedupe), and rows that already have it are skipped entirely.
+    const targets = rowsToTag(
+      rows.filter((r) => ids.includes(r.id)),
+      tag,
+    );
+    if (targets.length === 0) return true;
+    try {
+      for (const row of targets) {
+        await storage.records.update(row.id, { tags: mergeTagIntoTags(row.tags, tag) });
+      }
+      await reload();
+      return true;
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  }
+
+  async function handleBulkArchive(ids: readonly string[]): Promise<boolean> {
+    if (ids.length === 0) return false;
+    if (!window.confirm(bulkArchiveConfirm(ids.length))) return false;
+    try {
+      await storage.records.bulkPatch(ids, { isArchived: true });
+      await reload();
+      return true;
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  }
+
+  async function handleBulkPurge(ids: readonly string[]): Promise<boolean> {
+    if (ids.length === 0) return false;
+    // Confirmation states the count; the cascade is the same purgeApplication
+    // path as single permanent delete, looped once per id by bulkPurge.
+    if (!window.confirm(bulkPurgeConfirm(ids.length))) return false;
+    try {
+      await storage.bulkPurge(ids);
+      await reload();
+      return true;
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  }
+
   return (
     <div className="min-h-screen bg-canvas text-slate-200">
       <header className="border-b border-hairline bg-surface/60 backdrop-blur">
@@ -162,7 +248,7 @@ export default function App() {
           <div className="mr-auto">
             <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
             <p className="text-xs text-slate-400">
-              Part 9 of 12 — archive, restore &amp; permanent delete
+              Part 10 of 12 — bulk status, tags, archive &amp; permanent delete
             </p>
           </div>
           <DriverBadge driver={storage.driver} />
@@ -231,6 +317,9 @@ export default function App() {
                 filtered={liveRows.length > 0}
                 onRowClick={openEdit}
                 onArchive={(row) => void handleArchive(row)}
+                onBulkStatus={(ids, status) => handleBulkStatus(ids, status)}
+                onBulkTag={(ids, tag) => handleBulkTag(ids, tag)}
+                onBulkArchive={(ids) => handleBulkArchive(ids)}
               />
             ) : view === 'board' ? (
               <KanbanBoard
@@ -246,6 +335,9 @@ export default function App() {
                 rows={archived}
                 onRestore={(row) => void handleRestore(row)}
                 onDeletePermanent={(row) => void handleDeletePermanent(row)}
+                onBulkStatus={(ids, status) => handleBulkStatus(ids, status)}
+                onBulkTag={(ids, tag) => handleBulkTag(ids, tag)}
+                onBulkPurge={(ids) => handleBulkPurge(ids)}
               />
             )}
           </>

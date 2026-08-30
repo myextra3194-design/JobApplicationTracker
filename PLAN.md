@@ -35,9 +35,11 @@ wins except for the locked decisions below.
 - **One cascade path.** `purgeApplication(id, { records, attachments })` in
   `src/lib/storage/index.ts` is the only code that deletes a record and its files,
   and `getStorage().purge` is a one-line call to it. Part 5 grew no second delete
-  path; the 13th foundation check runs this exact function against isolated
-  stores, so a future cascade that forgets the files fails the harness rather than
-  silently leaking storage.
+  path; Part 10's bulk permanent delete (`getStorage().bulkPurge` ->
+  `bulkPurgeApplications`) loops that same function per id rather than
+  re-implementing a cascade. The cascade checks in `src/lib/selfTest.ts`
+  run this exact function against isolated stores, so a future cascade
+  that forgets the files fails the harness rather than silently leaking storage.
 - Soft delete (`records.remove`) and archive (`records.setArchived`) never touch
   files — the undo window has to bring the CV back with the row. Part 9's
   permanent delete is what calls `purgeApplication`.
@@ -105,6 +107,27 @@ wins except for the locked decisions below.
   the one `getStorage().purge` → `purgeApplication` path. No field names changed;
   `isArchived` stays boolean, no `attachmentIds`, `deletedAt` stays the undo window,
   and the self-test is still 14 checks.
+  Part 10 is in: checkbox multi-select on both tables (per-row box + a
+  select-all header box with an indeterminate state, driven by the shared
+  `src/components/useRowSelection.ts` hook) and a `BulkActionBar` shown once
+  anything is ticked. "Change status to…" and "Add tag…" exist on both the List
+  View and the Archived tab; "Archive selected" (confirm "Archive N
+  applications?") is List View only, and "Delete selected permanently" (confirm
+  "Delete N applications permanently? …it cannot be undone.") is Archived tab
+  only, exactly as the plan gates them. Status/archive persist via
+  `records.bulkPatch`, tags via a per-row merge (`mergeTagIntoTags` in
+  `src/lib/bulk.ts` — trim, case-insensitive dedupe, original casing kept).
+  Bulk permanent delete needed a capability the adapter lacked, so the
+  `TrackerStorage` seam gained **`bulkPurge(ids): Promise<number>`**
+  (`src/lib/storage/adapter.ts`) implemented as `bulkPurgeApplications` in
+  `src/lib/storage/index.ts` — it loops the existing `purgeApplication` once
+  per id; there is still exactly one cascade path, and unknown/duplicate ids
+  are skipped. Every bulk action applies to the whole current selection, then
+  clears it (a declined confirmation or failed write keeps the ticks). The
+  15th foundation check exercises the bulk cascade, including the
+  unselected-row-survives and duplicate/unknown-id cases; `src/lib/bulk.spec.ts`
+  covers the pure merge/confirmation logic. No field names changed; the
+  normaliser is untouched.
 
 ---
 

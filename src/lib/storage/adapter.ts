@@ -94,4 +94,11 @@ export interface TrackerStorage {
   readonly settings: SettingsStore;
   /** Permanent delete of a record AND its files, so nothing is orphaned. */
   purge(id: string): Promise<void>;
+  /**
+   * Part 10: bulk permanent delete. Still the one cascade path — this loops
+   * `purgeApplication` per id rather than offering a second delete mechanism,
+   * so the files can never be forgotten. Returns how many records were
+   * actually removed (unknown ids are skipped, not errors).
+   */
+  bulkPurge(ids: readonly string[]): Promise<number>;
 }
