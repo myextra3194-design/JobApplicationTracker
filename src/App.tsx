@@ -126,7 +126,7 @@ export default function App() {
           <div className="mr-auto">
             <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
             <p className="text-xs text-slate-400">
-              Part 7 of 12 — follow-ups, interview reminders & calendar export
+              Part 8 of 12 — analytics dashboard & weekly goal tracker
             </p>
           </div>
           <DriverBadge driver={storage.driver} />

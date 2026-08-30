@@ -1,6 +1,7 @@
 import type { StorageDriver } from '../types';
 import { LocalRecordStore } from './localRecordStore';
 import { IdbAttachmentStore } from './idbAttachmentStore';
+import { LocalSettingsStore } from './localSettingsStore';
 import type { AttachmentStore, RecordStore, TrackerStorage } from './adapter';
 
 /**
@@ -61,11 +62,13 @@ export function getStorage(): TrackerStorage {
 
   const records: RecordStore = new LocalRecordStore();
   const attachments: AttachmentStore = new IdbAttachmentStore();
+  const settings = new LocalSettingsStore();
 
   cache = {
     driver: 'local',
     records,
     attachments,
+    settings,
     // Files are keyed by application id (Part 5). Cascade only on permanent delete.
     purge: (id: string) => purgeApplication(id, { records, attachments }),
   };

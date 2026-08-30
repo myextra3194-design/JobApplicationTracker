@@ -1,3 +1,4 @@
+import { AnalyticsPanel } from './AnalyticsPanel';
 import { downloadDateAsIcs } from '../lib/ics';
 import { daysFromToday } from '../lib/pipeline';
 import { dueFollowUps, upcomingInterviews } from '../lib/upcoming';
@@ -76,6 +77,8 @@ export function UpcomingDashboard({ rows, onOpen }: UpcomingDashboardProps) {
           </ul>
         )}
       </section>
+
+      <AnalyticsPanel rows={rows} />
     </div>
   );
 }

@@ -16,7 +16,7 @@ describe('runSelfTests() against a real storage stack', () => {
     const results = await runSelfTests();
     const failures = results.filter((r) => !r.ok).map((r) => `${r.name}: ${r.detail}`);
     expect(failures).toEqual([]);
-    expect(results.length).toBe(13); // one per foundation guarantee; add one when you add a check
+    expect(results.length).toBe(14); // one per foundation guarantee; add one when you add a check
 
     const blobCheck = results.find((r) => r.name === 'IndexedDB blob round-trip');
     expect(blobCheck, 'blob check must run in this environment').toBeDefined();
