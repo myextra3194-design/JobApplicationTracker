@@ -54,6 +54,34 @@ export async function purgeApplication(
   await stores.records.replaceAll((await stores.records.all()).filter((r) => r.id !== id));
 }
 
+/**
+ * Part 10: bulk permanent delete — and deliberately NOT a second cascade
+ * implementation. It loops the one cascade path (`purgeApplication`) once per
+ * id, so the rule that "permanent delete takes the record and its files, in
+ * that order" stays in a single function. Unknown ids are skipped (and not
+ * double-counted when an id appears twice). Returns how many records were
+ * actually removed, which is what the self-test asserts against.
+ */
+export async function bulkPurgeApplications(
+  ids: readonly string[],
+  stores: {
+    records: Pick<RecordStore, 'all' | 'replaceAll'>;
+    attachments: Pick<AttachmentStore, 'removeAllFor'>;
+  },
+): Promise<number> {
+  const existing = new Set((await stores.records.all()).map((r) => r.id));
+  let removed = 0;
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id) || !existing.has(id)) continue;
+    seen.add(id);
+    await purgeApplication(id, stores);
+    existing.delete(id);
+    removed += 1;
+  }
+  return removed;
+}
+
 export function getStorage(): TrackerStorage {
   if (cache) return cache;
 
@@ -71,6 +99,8 @@ export function getStorage(): TrackerStorage {
     settings,
     // Files are keyed by application id (Part 5). Cascade only on permanent delete.
     purge: (id: string) => purgeApplication(id, { records, attachments }),
+    // Part 10: the Archived tab's "Delete selected permanently" — same cascade, looped.
+    bulkPurge: (ids: readonly string[]) => bulkPurgeApplications(ids, { records, attachments }),
   };
   return cache;
 }

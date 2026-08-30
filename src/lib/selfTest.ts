@@ -1,7 +1,7 @@
 import { emptyJobApplication, normalizeJobApplication, STORAGE_KEY } from './normalize';
 import { blobToArrayBuffer } from './blob';
 import { isFollowUpDue, toPlainDate, weekKeyOf } from './pipeline';
-import { purgeApplication } from './storage';
+import { bulkPurgeApplications, purgeApplication } from './storage';
 import { IdbAttachmentStore } from './storage/idbAttachmentStore';
 import { corruptKeyFor, LocalRecordStore } from './storage/localRecordStore';
 import { LocalSettingsStore } from './storage/localSettingsStore';
@@ -341,6 +341,60 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       assert((await attachments.listFor(other.id)).length === 0, 'purge orphaned the neighbouring files');
 
       return 'archive and soft delete keep files; permanent delete takes record + files, one id at a time';
+    }),
+
+    runCheck('bulk permanent delete cascades the whole selection', async (store) => {
+      if (typeof indexedDB === 'undefined') throw new SkipError('indexedDB unavailable in this context');
+      const ids: string[] = [];
+      const payload = new TextEncoder().encode('%PDF-1.4 bulk cascade probe');
+      for (const label of ['Bulk One', 'Bulk Two', 'Bulk Three']) {
+        const record = await store.create({ companyName: `Sample ${label} Co ${SAMPLE}` });
+        ids.push(record.id);
+        await attachments.add({
+          applicationId: record.id,
+          name: `${label.replace(/\s/g, '')}.pdf`,
+          blob: new Blob([payload], { type: 'application/pdf' }),
+        });
+      }
+      // A row outside the selection: its record AND its files must survive.
+      const keeper = await store.create({ companyName: `Sample Bulk Keeper Co ${SAMPLE}` });
+      await attachments.add({
+        applicationId: keeper.id,
+        name: 'Keeper.pdf',
+        blob: new Blob([payload], { type: 'application/pdf' }),
+      });
+      assert((await store.all()).length === 4, 'fixture: expected 4 records before the bulk purge');
+      for (const id of ids) {
+        assert((await attachments.listFor(id)).length === 1, 'fixture: a probe file was not stored');
+      }
+
+      // A duplicated id and a ghost id: the count must be the records really
+      // removed, and the loop must stay on the one `purgeApplication` path.
+      const removed = await bulkPurgeApplications([...ids, ...ids.slice(0, 1), 'ghost-id'], {
+        records: store,
+        attachments,
+      });
+      assert(removed === 3, `expected 3 removed (unknown skipped, duplicate counted once), got ${removed}`);
+      for (const id of ids) {
+        assert((await store.get(id)) === null, 'a selected record survived the bulk purge');
+        assert((await attachments.listFor(id)).length === 0, 'a selected record\'s files survived the bulk purge');
+      }
+      assert((await store.get(keeper.id)) !== null, 'bulk purge removed an unselected record');
+      assert(
+        (await attachments.listFor(keeper.id)).length === 1,
+        'bulk purge cascaded another record\'s files',
+      );
+
+      // Empty selection is a no-op, not an error.
+      assert(
+        (await bulkPurgeApplications([], { records: store, attachments })) === 0,
+        'an empty bulk purge must remove 0 records',
+      );
+
+      // Clean the keeper through the same cascade path so IndexedDB stays tidy.
+      await purgeApplication(keeper.id, { records: store, attachments });
+      assert((await attachments.listFor(keeper.id)).length === 0, 'keeper cleanup left files behind');
+      return '3 selected records and their files removed via the looped cascade; duplicate/unknown ids ignored; unselected row untouched';
     }),
 
     runCheck('week key groups applications for the goal tracker', () => {
