@@ -10,11 +10,13 @@ import {
   type StagedAttachment,
 } from '../lib/attachments';
 import { formatBytes } from '../lib/blob';
+import { findDuplicates } from '../lib/duplicates';
 import {
   addTag,
   applicationToDraft,
   emptyFormDraft,
   formHasErrors,
+  needsFinalResultNudge,
   removeTag,
   validateApplicationForm,
   type ApplicationFormDraft,
@@ -30,12 +32,24 @@ import {
 interface ApplicationFormProps {
   open: boolean;
   initial: JobApplication | null;
+  /**
+   * Part 6: live records (non-archived, non-deleted) to check for duplicates
+   * against. Only the add mode warns — edit mode never does.
+   */
+  liveRows: JobApplication[];
   saving: boolean;
   onClose: () => void;
   onSave: (draft: ApplicationFormDraft) => Promise<void>;
 }
 
-export function ApplicationForm({ open, initial, saving, onClose, onSave }: ApplicationFormProps) {
+export function ApplicationForm({
+  open,
+  initial,
+  liveRows,
+  saving,
+  onClose,
+  onSave,
+}: ApplicationFormProps) {
   const titleId = useId();
   const interviewListId = useId();
   const resultListId = useId();
@@ -88,6 +102,11 @@ export function ApplicationForm({ open, initial, saving, onClose, onSave }: Appl
   if (!open) return null;
 
   const mode = initial ? 'Edit application' : 'Add application';
+
+  // Part 6: duplicate warning is add-only and never blocks saving — the user can
+  // proceed even when a live record already holds the same role. Archived and
+  // deleted rows never count (findDuplicates), and edit mode does not warn at all.
+  const duplicateMatches = initial ? [] : findDuplicates(liveRows, draft);
 
   function patch<K extends keyof ApplicationFormDraft>(key: K, value: ApplicationFormDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -197,6 +216,14 @@ export function ApplicationForm({ open, initial, saving, onClose, onSave }: Appl
         </div>
 
         <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
+          {duplicateMatches.length > 0 ? (
+            <p
+              role="status"
+              className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs leading-relaxed text-amber-200"
+            >
+              You already applied to this role — continue anyway?
+            </p>
+          ) : null}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Company name" required error={showErrors ? errors.companyName : undefined}>
               <input
@@ -374,6 +401,11 @@ export function ApplicationForm({ open, initial, saving, onClose, onSave }: Appl
                   <option key={s} value={s} />
                 ))}
               </datalist>
+              {needsFinalResultNudge(draft.status, draft.finalResult) ? (
+                <span className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] leading-relaxed text-sky-200">
+                  Marked {draft.status} — want to record the final result too? Saving works either way.
+                </span>
+              ) : null}
             </Field>
             <Field label="Match score (0–100)">
               <input

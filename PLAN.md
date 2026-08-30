@@ -59,7 +59,7 @@ wins except for the locked decisions below.
 - Data is per browser install: phone ≠ desktop ≠ iPhone-home-screen-app. Sync is out
   of scope until Part 11's export/import; nobody should plan on cross-device
   continuity.
-- Repo state check (2026-08-30): this checkout contains **Parts 1–5**. Part 3 was
+- Repo state check (2026-08-30): this checkout contains **Parts 1–6**. Part 3 was
   rebuilt to spec after the old board branch was found never merged: List/Board
   toggle at the top of the page, the seven columns in pipeline order, non-archived
   only, and status change via a dropdown on the card (no drag-and-drop) — same
@@ -73,6 +73,18 @@ wins except for the locked decisions below.
   multiple files each with a label you type), a per-file Download/Remove on the
   saved list, and the 13th foundation check. Staged files are written only after
   the record has an id, so a cancelled form never orphans a blob.
+  Part 6 is in: clickable "Open posting" links in list rows and board cards
+  (normalised once on write, never re-normalised on render; nothing clickable
+  when `jobLink` is empty), the `previewText` helper in `src/lib/preview.ts`
+  (first non-blank line, ~60 chars, word-boundary "...") driving two separate
+  Notes / Company Research previews, the final-result nudge rule
+  (`finalResultIsFilled` / `needsFinalResultNudge` in `src/lib/form.ts` —
+  blank-or-`Pending` counts as not filled; Rejected/Withdrawn only; never
+  blocks saving), and the add-only duplicate warning (`duplicateKey` /
+  `findDuplicates` in `src/lib/duplicates.ts` — case-insensitive, trimmed,
+  excludes archived and deleted rows, edit mode never warns). No field names
+  changed; record still has no `attachmentIds`, `deletedAt` stays as the undo
+  window, and the 13th foundation check is untouched.
 
 ---
 

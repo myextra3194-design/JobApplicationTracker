@@ -113,6 +113,19 @@ function BoardCard({
         </select>
       </div>
       <p className="mt-1.5 font-mono text-[11px] text-slate-500">Applied {row.applicationDate ?? '—'}</p>
+      {row.jobLink ? (
+        <a
+          href={row.jobLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={row.jobLink}
+          onClick={(event) => event.stopPropagation()}
+          className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-sky-300 hover:text-sky-200"
+        >
+          Open posting
+          <span aria-hidden>↗</span>
+        </a>
+      ) : null}
       {row.tags.length > 0 ? (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {row.tags.map((tag) => (
