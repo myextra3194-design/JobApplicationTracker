@@ -14,8 +14,9 @@ wins except for the locked decisions below.
 - Stack: React + Vite + Tailwind, records in localStorage, files in IndexedDB.
   No backend, no login, no component library, no state library.
 - Persistence sits behind `RecordStore` + `AttachmentStore`. UI never touches
-  `localStorage` or `indexedDB` directly; it calls `getStorage()`. A REST + SQLite
-  adapter can replace the local pair later without rewriting components.
+  `localStorage` or `indexedDB` directly; it calls `getStorage()`. `SettingsStore`
+  holds the weekly goal and the light/dark theme through the same seam. A REST +
+  SQLite adapter can replace the local pair later without rewriting components.
 - Cadence: one part at a time. Stop for review in the live preview after each.
 - Status pipeline is the plan's seven stages:
   `Saved → Applied → Shortlisted → Interview → Offer → Rejected → Withdrawn`.
@@ -173,12 +174,26 @@ wins except for the locked decisions below.
   auto-expiring, de-duped queue in `src/lib/toast.ts`; save, status moves,
   archive/restore, permanent and bulk deletes, bulk edits, import, and both export
   paths all confirm after success while the existing confirmation dialogs and Data
-  menu notes remain. No storage seam or self-test capability changed: the harness
-  remains at 16 checks. The service-worker shell cache was bumped from `jat-v1` to
-  `jat-v2` for the new appearance. `tagColor.spec.ts`, `toast.spec.ts`, and the
-  React createRoot browser smoke flow in `src/app.smoke.spec.ts` bring the suite
-  to 16 files / 175 tests; the smoke flow also covers the requested end-to-end
-  status, calendar, dashboard, archive, bulk, export and attachment restore pass.
+  menu notes remain. No record field name or status value changed, and the one
+  cascade path is untouched.
+  The reference-inspired polish adds a persisted light/dark theme toggle in the
+  header. `TrackerSettings` gained `theme: 'dark' | 'light'` (legacy settings
+  without the field load safely as dark); the UI still only reads/writes through
+  `getStorage().settings`, never `localStorage` directly. Semantic colour tokens
+  (`canvas/surface/surface-raised/hairline/ink/muted/faint/accent`) drive both
+  themes, status chips stay on `STATUS_TONE`, tag chips stay deterministic through
+  `tagColor`, and primary actions use a violet/indigo gradient. Mobile gains a
+  polished fixed bottom nav (Pipeline/Board/Upcoming/Archived) and enough bottom
+  padding so it never covers content; the add/edit form is a responsive rounded
+  sheet with the existing fields, validation, attachments, dates, calendar export,
+  duplicate warning, research, recruiter, salary, match score and CV-version
+  behaviour intact. The Data menu popover clips to the viewport on narrow screens.
+  The self-test harness remains at 16 checks; the settings check now also proves
+  theme defaults, legacy loading and round-tripping. The service-worker shell
+  cache was bumped to `jat-v3` for the new appearance. `settings.spec.ts`, the
+  theme/light toggle smoke flow added to `src/app.smoke.spec.ts`, and the original
+  end-to-end smoke flow bring the suite to 17 files / 180 tests with no new
+  dependency and no backend/state/component library.
 
 ---
 

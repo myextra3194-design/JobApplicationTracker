@@ -36,20 +36,20 @@ export function BulkActionBar({
   }
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2">
-      <span className="mr-1 shrink-0 text-xs font-semibold text-sky-200" aria-live="polite">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-accent/40 bg-accent/10 px-3.5 py-2.5 shadow-sm">
+      <span className="mr-1 shrink-0 text-xs font-semibold text-accent" aria-live="polite">
         {selectedCount} selected
       </span>
 
-      <label className="flex items-center gap-1.5 text-xs text-slate-300">
-        <span className="hidden sm:inline">Change status to…</span>
+      <label className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted sm:flex-none">
+        <span className="hidden lg:inline">Change status to…</span>
         <select
           value=""
           aria-label="Change status of selected applications"
           onChange={(event) => {
             if (event.target.value) onStatusChange(event.target.value as ApplicationStatus);
           }}
-          className="rounded-lg border border-hairline bg-surface px-2 py-1.5 text-xs text-slate-200"
+          className="w-full rounded-xl border border-hairline bg-surface px-2 py-1.5 text-xs text-ink shadow-sm sm:w-auto"
         >
           <option value="" disabled>
             Change status to…
@@ -62,7 +62,7 @@ export function BulkActionBar({
         </select>
       </label>
 
-      <span className="flex items-center gap-1">
+      <span className="flex min-w-0 flex-1 items-center gap-1 sm:flex-none">
         <input
           type="text"
           value={tag}
@@ -75,13 +75,13 @@ export function BulkActionBar({
           }}
           placeholder="Add tag…"
           aria-label="Add a tag to selected applications"
-          className="w-32 rounded-lg border border-hairline bg-surface px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-500"
+          className="w-32 min-w-0 flex-1 rounded-xl border border-hairline bg-surface px-2 py-1.5 text-xs text-ink shadow-sm placeholder:text-faint"
         />
         <button
           type="button"
           onClick={submitTag}
           disabled={!tag.trim()}
-          className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:border-sky-500/50 hover:text-sky-200 disabled:cursor-default disabled:opacity-40 disabled:hover:border-hairline disabled:hover:text-slate-300"
+          className="rounded-xl border border-hairline bg-surface px-2.5 py-1.5 text-xs font-medium text-muted shadow-sm transition hover:border-accent/50 hover:text-accent disabled:cursor-default disabled:opacity-40 disabled:hover:border-hairline disabled:hover:text-muted"
         >
           Add tag
         </button>
@@ -91,7 +91,7 @@ export function BulkActionBar({
         <button
           type="button"
           onClick={onArchive}
-          className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:border-amber-500/50 hover:text-amber-200"
+          className="rounded-xl border border-hairline bg-surface px-2.5 py-1.5 text-xs font-medium text-muted shadow-sm transition hover:border-amber-500/50 hover:text-amber-700 dark:hover:text-amber-200"
         >
           Archive selected
         </button>
@@ -101,7 +101,7 @@ export function BulkActionBar({
         <button
           type="button"
           onClick={onPurge}
-          className="rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20 hover:text-red-200"
+          className="rounded-xl border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-500/20 dark:text-red-300"
         >
           Delete selected permanently
         </button>

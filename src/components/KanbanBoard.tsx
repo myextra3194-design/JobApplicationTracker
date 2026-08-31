@@ -23,12 +23,18 @@ interface KanbanBoardProps {
 export function KanbanBoard({ rows, matchIds, onStatusChange, onCardClick, onAdd }: KanbanBoardProps) {
   if (rows.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-hairline bg-surface px-4 py-12 text-center">
-        <p className="text-sm font-medium text-slate-200">No applications yet — add your first one</p>
+      <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-hairline bg-gradient-to-br from-violet-500/5 to-indigo-500/5 px-4 py-12 text-center shadow-sm">
+        <div className="flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-white shadow-md">
+          <span aria-hidden>▦</span>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-ink">No applications yet — add your first one</p>
+          <p className="mt-1 text-xs text-muted">The board fills in as applications move through your pipeline.</p>
+        </div>
         <button
           type="button"
           onClick={onAdd}
-          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-500"
+          className="gradient-accent rounded-xl px-4 py-2 text-sm font-semibold shadow-md"
         >
           Add your first application
         </button>
@@ -40,25 +46,25 @@ export function KanbanBoard({ rows, matchIds, onStatusChange, onCardClick, onAdd
   const isDimmed = (row: JobApplication) => !matchIds.has(row.id);
 
   return (
-    <div className="-mx-1 flex min-w-0 snap-x gap-3 overflow-x-auto overscroll-x-contain px-1 pb-2">
+    <div className="-mx-1 flex min-w-0 snap-x gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3">
       {PIPELINE.map((status) => {
         const cards = columns[status];
         return (
           <section
             key={status}
             aria-label={`${status} column`}
-            className={`flex w-64 shrink-0 snap-start flex-col rounded-xl border bg-surface ${STATUS_TONE[status].column}`}
+            className={`flex w-72 shrink-0 snap-start flex-col overflow-hidden rounded-2xl border bg-surface shadow-sm ${STATUS_TONE[status].column}`}
           >
-            <header className="flex items-center gap-1.5 border-b border-hairline px-3 py-2.5">
-              <span aria-hidden className={`size-1.5 rounded-full ${STATUS_TONE[status].dot}`} />
-              <h2 className="text-xs font-semibold text-slate-200">{status}</h2>
-              <span className="ml-auto rounded-full bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+            <header className="flex items-center gap-2 border-b border-hairline px-3 py-3">
+              <span aria-hidden className={`size-2 rounded-full ${STATUS_TONE[status].dot}`} />
+              <h2 className="text-xs font-semibold text-ink">{status}</h2>
+              <span className="ml-auto rounded-full bg-surface-raised px-2 py-0.5 font-mono text-[10px] text-muted">
                 {cards.length}
               </span>
             </header>
-            <div className="flex min-h-24 flex-col gap-2 p-2">
+            <div className="flex min-h-28 flex-col gap-2.5 bg-surface-soft/30 p-2.5">
               {cards.length === 0 ? (
-                <p className="px-1 py-3 text-center text-[11px] text-slate-600">Empty</p>
+                <p className="px-1 py-4 text-center text-[11px] text-faint">Empty</p>
               ) : (
                 cards.map((row) => (
                   <BoardCard
@@ -100,14 +106,14 @@ function BoardCard({
       }}
       role="button"
       tabIndex={0}
-      className={`cursor-pointer rounded-lg border border-hairline bg-surface-raised p-2.5 transition-all ${
-        dimmed ? 'opacity-40 saturate-50' : 'hover:border-sky-500/40'
-      }`}
+      className={`cursor-pointer rounded-xl border bg-surface-raised p-3 shadow-sm transition-all ${
+        dimmed ? 'opacity-45 saturate-50' : 'hover:border-accent/40 hover:shadow-md'
+      } ${dimmed ? 'border-hairline' : 'border-hairline'}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-medium text-slate-100">{row.companyName || '—'}</h3>
-          <p className="truncate text-xs text-slate-400">{row.jobTitle || '—'}</p>
+          <h3 className="truncate text-sm font-medium text-ink">{row.companyName || '—'}</h3>
+          <p className="truncate text-xs text-muted">{row.jobTitle || '—'}</p>
         </div>
         <StatusChip status={row.status} className="shrink-0" />
       </div>
@@ -117,7 +123,7 @@ function BoardCard({
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
         onChange={(event) => onStatusChange(row, event.target.value as ApplicationStatus)}
-        className="mt-2 w-full rounded-md border border-hairline bg-surface px-2 py-1.5 text-[11px] text-slate-300"
+        className="mt-2.5 w-full rounded-lg border border-hairline bg-surface px-2 py-1.5 text-[11px] text-muted"
       >
         {STATUSES.map((status) => (
           <option key={status} value={status}>
@@ -125,7 +131,7 @@ function BoardCard({
           </option>
         ))}
       </select>
-      <p className="mt-1.5 font-mono text-[11px] text-slate-500">Applied {row.applicationDate ?? '—'}</p>
+      <p className="mt-2 font-mono text-[11px] text-faint">Applied {row.applicationDate ?? '—'}</p>
       {row.jobLink ? (
         <a
           href={row.jobLink}
@@ -134,14 +140,16 @@ function BoardCard({
           title={row.jobLink}
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
-          className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-sky-300 hover:text-sky-200"
+          className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-accent hover:text-accent-strong"
         >
           Open posting <span aria-hidden>↗</span>
         </a>
       ) : null}
       {row.tags.length > 0 ? (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {row.tags.map((tag) => <TagChip key={tag} tag={tag} className="text-[10px]" />)}
+        <div className="mt-2 flex flex-wrap gap-1">
+          {row.tags.map((tag) => (
+            <TagChip key={tag} tag={tag} className="text-[10px]" />
+          ))}
         </div>
       ) : null}
     </article>

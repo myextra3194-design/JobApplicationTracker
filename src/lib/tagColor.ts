@@ -3,17 +3,17 @@
  * do not replace them with utility names assembled from a hue variable.
  */
 const TAG_TONE_CLASSES: readonly string[] = [
-  'border-cyan-500/30 bg-cyan-500/10 text-cyan-200',
-  'border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200',
-  'border-lime-500/30 bg-lime-500/10 text-lime-200',
-  'border-orange-500/30 bg-orange-500/10 text-orange-200',
-  'border-pink-500/30 bg-pink-500/10 text-pink-200',
-  'border-teal-500/30 bg-teal-500/10 text-teal-200',
-  'border-violet-500/30 bg-violet-500/10 text-violet-200',
-  'border-yellow-500/30 bg-yellow-500/10 text-yellow-200',
+  'border-cyan-500/30 bg-cyan-500/10 text-cyan-800 dark:text-cyan-200',
+  'border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-800 dark:text-fuchsia-200',
+  'border-lime-500/30 bg-lime-500/10 text-lime-800 dark:text-lime-200',
+  'border-orange-500/30 bg-orange-500/10 text-orange-800 dark:text-orange-200',
+  'border-pink-500/30 bg-pink-500/10 text-pink-800 dark:text-pink-200',
+  'border-teal-500/30 bg-teal-500/10 text-teal-800 dark:text-teal-200',
+  'border-violet-500/30 bg-violet-500/10 text-violet-800 dark:text-violet-200',
+  'border-yellow-500/30 bg-yellow-500/10 text-yellow-800 dark:text-yellow-200',
 ];
 
-const EMPTY_TAG_TONE = 'border-hairline bg-surface-raised text-slate-300';
+const EMPTY_TAG_TONE = 'border-hairline bg-surface-raised text-muted';
 
 /**
  * Return one complete Tailwind class string for a tag. Case and surrounding

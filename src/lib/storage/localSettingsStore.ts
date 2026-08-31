@@ -1,20 +1,26 @@
-import { StorageFullError, type SettingsStore, type TrackerSettings } from './adapter';
+import { StorageFullError, type SettingsStore, type ThemeMode, type TrackerSettings } from './adapter';
 
 /**
  * localStorage-backed settings document, isolated from `jat.applications.v1`.
- * Weekly goal lives here so a settings write can never rewrite the applications
- * envelope. UI still goes through `getStorage().settings`.
+ * Weekly goal and the UI theme live here so a settings write can never rewrite
+ * the applications envelope. UI still goes through `getStorage().settings`, and
+ * legacy documents that predate the `theme` field load safely in dark mode.
  */
 
 export const SETTINGS_KEY = 'jat.settings.v1';
 export const DEFAULT_WEEKLY_GOAL = 5;
+export const DEFAULT_THEME: ThemeMode = 'dark';
 
 export function clampWeeklyGoal(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_WEEKLY_GOAL;
   return Math.max(0, Math.min(99, Math.round(n)));
 }
 
-const defaults = (): TrackerSettings => ({ weeklyGoal: DEFAULT_WEEKLY_GOAL });
+function normalizeTheme(value: unknown): ThemeMode {
+  return value === 'light' ? 'light' : 'dark';
+}
+
+const defaults = (): TrackerSettings => ({ weeklyGoal: DEFAULT_WEEKLY_GOAL, theme: DEFAULT_THEME });
 
 function readDocument(key: string): TrackerSettings {
   let raw: string | null = null;
@@ -29,7 +35,7 @@ function readDocument(key: string): TrackerSettings {
     if (typeof parsed !== 'object' || parsed === null) return defaults();
     const candidate = parsed as Record<string, unknown>;
     const goal = typeof candidate.weeklyGoal === 'number' ? candidate.weeklyGoal : DEFAULT_WEEKLY_GOAL;
-    return { weeklyGoal: clampWeeklyGoal(goal) };
+    return { weeklyGoal: clampWeeklyGoal(goal), theme: normalizeTheme(candidate.theme) };
   } catch {
     return defaults();
   }
@@ -56,6 +62,7 @@ export class LocalSettingsStore implements SettingsStore {
     const next: TrackerSettings = {
       weeklyGoal:
         patch.weeklyGoal === undefined ? current.weeklyGoal : clampWeeklyGoal(patch.weeklyGoal),
+      theme: patch.theme === undefined ? current.theme : normalizeTheme(patch.theme),
     };
     writeDocument(this.storageKey, next);
     return next;

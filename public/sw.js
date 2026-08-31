@@ -9,7 +9,7 @@
  * Bump CACHE_VERSION on every deploy that must replace a broken shell.
  */
 
-const CACHE_VERSION = 'jat-v2';
+const CACHE_VERSION = 'jat-v3';
 
 // Precached so a fresh install can launch once with the network unavailable.
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];

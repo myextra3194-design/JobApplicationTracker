@@ -18,8 +18,8 @@ export function MobileSelectAll({
   label = 'applications',
 }: MobileSelectAllProps) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-surface px-3 py-2 sm:hidden">
-      <label className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-300">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-surface px-3.5 py-2.5 shadow-sm sm:hidden">
+      <label className="flex min-w-0 items-center gap-2 text-xs font-medium text-ink">
         <input
           type="checkbox"
           checked={allSelected}
@@ -28,11 +28,11 @@ export function MobileSelectAll({
           }}
           onChange={onToggleAll}
           aria-label={allSelected ? `Deselect all ${label}` : `Select all ${label}`}
-          className="size-4 shrink-0 accent-sky-500"
+          className="size-4 shrink-0 accent-[#6d28d9]"
         />
         <span>{allSelected ? 'Clear selection' : 'Select all'}</span>
       </label>
-      <span className="shrink-0 font-mono text-[11px] text-slate-500">
+      <span className="shrink-0 font-mono text-[11px] text-muted">
         {count} {count === 1 ? 'item' : 'items'}
       </span>
     </div>

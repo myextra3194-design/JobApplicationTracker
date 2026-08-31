@@ -414,9 +414,17 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       await settings.clear();
       const appsBefore = globalThis.localStorage.getItem(store.storageKey);
       const realAppsBefore = globalThis.localStorage.getItem(STORAGE_KEY);
+      // Legacy settings documents without a theme still load safely.
+      const legacy = await settings.get();
+      assert(legacy.theme === 'dark', `legacy settings must default to dark, got ${legacy.theme}`);
       await settings.set({ weeklyGoal: 7 });
-      const read = await settings.get();
+      let read = await settings.get();
       assert(read.weeklyGoal === 7, `expected weeklyGoal 7, got ${read.weeklyGoal}`);
+      assert(read.theme === 'dark', 'theme must round-trip when the settings document is missing it');
+      await settings.set({ theme: 'light' });
+      read = await settings.get();
+      assert(read.weeklyGoal === 7, 'changing theme must not reset weeklyGoal');
+      assert(read.theme === 'light', `expected theme light, got ${read.theme}`);
       assert(
         globalThis.localStorage.getItem(store.storageKey) === appsBefore,
         'settings write must not rewrite the applications document',
@@ -427,7 +435,7 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       );
       await settings.clear();
       assert(globalThis.localStorage.getItem(settingsKey) === null, 'isolated settings key was not cleaned up');
-      return 'weekly goal round-trips on jat.settings.v1; applications document untouched';
+      return 'weekly goal and theme round-trip on jat.settings.v1; applications document untouched';
     }),
 
     runCheck('backup export/import round-trips records and files', async (store) => {

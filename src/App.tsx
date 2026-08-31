@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ApplicationForm } from './components/ApplicationForm';
 import { ApplicationList } from './components/ApplicationList';
 import { ArchivedList } from './components/ArchivedList';
@@ -20,6 +20,7 @@ import {
 import { draftToInput, type ApplicationFormDraft } from './lib/form';
 import { applyQuery, DEFAULT_FILTERS, filterToQuery, type FilterState } from './lib/query';
 import { getStorage } from './lib/storage';
+import type { ThemeMode } from './lib/storage/adapter';
 import { pushToast } from './lib/toast';
 import type { ApplicationStatus, JobApplication } from './lib/types';
 
@@ -57,6 +58,7 @@ export default function App() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<JobApplication | null>(null);
   const [saving, setSaving] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>('dark');
 
   const reload = useCallback(async () => {
     try {
@@ -73,6 +75,44 @@ export default function App() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Part 12 visual pass: the theme lives in the settings seam, never localStorage
+  // directly. Legacy settings documents without `theme` resolve to dark.
+  useEffect(() => {
+    let cancelled = false;
+    void storage.settings
+      .get()
+      .then((settings) => {
+        if (!cancelled) setTheme(settings.theme);
+      })
+      .catch(() => {
+        if (!cancelled) setTheme('dark');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storage]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', theme === 'dark');
+    root.classList.toggle('light', theme === 'light');
+    root.style.colorScheme = theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    meta?.setAttribute('content', theme === 'dark' ? '#0b0f16' : '#f6f7fb');
+  }, [theme]);
+
+  async function toggleTheme() {
+    const next: ThemeMode = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    try {
+      await storage.settings.set({ theme: next });
+      pushToast(next === 'dark' ? 'Dark theme enabled.' : 'Light theme enabled.');
+    } catch (err) {
+      setTheme(next === 'dark' ? 'light' : 'dark');
+      setLoadError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   // Part 4: both views derive from the same store snapshot — the list shows
   // the filtered+sorted rows, the board dims the rows that did not match.
@@ -259,40 +299,58 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-canvas text-slate-200">
-      <header className="border-b border-hairline bg-surface/60 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4 sm:px-5">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-blue-500/15 text-lg">📋</div>
-          <div className="mr-auto">
-            <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
-            <p className="text-xs text-slate-400">
+    <div className="min-h-screen bg-canvas text-ink">
+      <header className="sticky top-0 z-30 border-b border-hairline bg-surface/85 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-3 sm:gap-3 sm:px-5 sm:py-4">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 text-lg text-white shadow-sm">
+            📋
+          </div>
+          <div className="mr-auto min-w-0">
+            <h1 className="truncate text-base font-semibold tracking-tight text-ink">Job Application Tracker</h1>
+            <p className="hidden text-xs text-muted sm:block">
               Part 12 of 12 — polished, responsive, and local-first
             </p>
           </div>
-          <DriverBadge driver={storage.driver} />
+          <div className="hidden md:inline-flex">
+            <DriverBadge driver={storage.driver} />
+          </div>
           <DataMenu onImported={() => void reload()} />
           <button
             type="button"
-            onClick={openAdd}
-            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+            onClick={() => void toggleTheme()}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-hairline bg-surface px-2.5 text-xs font-medium text-muted transition hover:border-accent/50 hover:text-accent"
           >
-            Add Application
+            <span aria-hidden>{theme === 'dark' ? '☀️' : '🌙'}</span>
+            <span className="hidden sm:inline">{theme === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={openAdd}
+            className="gradient-accent inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-sm font-semibold shadow-md"
+          >
+            Add <span className="hidden sm:inline">Application</span>
           </button>
         </div>
       </header>
 
-      <main className="mx-auto flex min-w-0 max-w-6xl flex-col gap-5 px-4 py-5 sm:px-5 sm:py-6">
+      <main className="mx-auto flex min-w-0 max-w-6xl flex-col gap-5 px-4 py-5 pb-28 sm:px-5 sm:py-6 sm:pb-10">
         {loadError ? (
-          <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 font-mono text-xs text-red-200">
+          <p className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 font-mono text-xs text-red-800 dark:text-red-200">
             {loadError}
           </p>
         ) : null}
 
         {rows === null ? (
-          <p className="text-sm text-slate-500">Loading…</p>
+          <p className="text-sm text-faint">Loading…</p>
         ) : (
           <>
-            <div className="flex w-fit rounded-lg border border-hairline bg-surface p-0.5" role="tablist" aria-label="View">
+            <div
+              className="hidden w-fit rounded-xl border border-hairline bg-surface p-0.5 shadow-sm sm:flex"
+              role="tablist"
+              aria-label="View"
+            >
               {(
                 [
                   ['list', 'List View'],
@@ -307,8 +365,8 @@ export default function App() {
                   role="tab"
                   aria-selected={view === mode}
                   onClick={() => setView(mode)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    view === mode ? 'bg-surface-raised text-slate-100' : 'text-slate-400 hover:text-slate-200'
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    view === mode ? 'bg-surface-raised text-ink shadow-sm' : 'text-muted hover:text-ink'
                   }`}
                 >
                   {label}
@@ -323,7 +381,7 @@ export default function App() {
                   type="button"
                   onClick={() => setView('archived')}
                   title="View the Archived tab"
-                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:border-sky-500/50 hover:text-slate-100"
+                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-xs font-medium text-muted shadow-sm hover:border-accent/50 hover:text-accent"
                 >
                   {archivedCount} archived
                 </button>
@@ -364,8 +422,8 @@ export default function App() {
           </>
         )}
 
-        <details className="rounded-xl border border-hairline bg-surface">
-          <summary className="cursor-pointer px-5 py-3 text-xs text-slate-500 hover:text-slate-300">
+        <details className="rounded-xl border border-hairline bg-surface shadow-sm">
+          <summary className="cursor-pointer px-5 py-3 text-xs text-muted hover:text-ink">
             Foundation checks
           </summary>
           <div className="border-t border-hairline px-1 pb-1">
@@ -374,6 +432,7 @@ export default function App() {
         </details>
       </main>
 
+      <MobileBottomNav view={view} archivedCount={archivedCount} onNavigate={setView} />
       <ApplicationForm
         open={formOpen}
         initial={editing}
@@ -390,11 +449,96 @@ export default function App() {
 function DriverBadge({ driver }: { driver: 'local' | 'rest' }) {
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-slate-300"
+      className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-muted"
       title={driver === 'local' ? 'localStorage + IndexedDB, this browser only' : 'Remote API'}
     >
       <span className={`size-1.5 rounded-full ${driver === 'local' ? 'bg-green-400' : 'bg-blue-400'}`} />
       {driver === 'local' ? 'local storage' : 'remote API'}
     </span>
+  );
+}
+
+const MOBILE_NAV_ITEMS: readonly {
+  mode: ViewMode;
+  label: string;
+  icon: ReactNode;
+}[] = [
+  {
+    mode: 'list',
+    label: 'Pipeline',
+    icon: (
+      <svg viewBox="0 0 20 20" aria-hidden className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path strokeLinecap="round" d="M4 4.5h12M4 7.5h12M4 10.5h12M4 13.5h12" />
+      </svg>
+    ),
+  },
+  {
+    mode: 'board',
+    label: 'Board',
+    icon: (
+      <svg viewBox="0 0 20 20" aria-hidden className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <rect x="3" y="3.5" width="5.5" height="13" rx="1.5" />
+        <rect x="11.5" y="3.5" width="5.5" height="13" rx="1.5" />
+      </svg>
+    ),
+  },
+  {
+    mode: 'upcoming',
+    label: 'Upcoming',
+    icon: (
+      <svg viewBox="0 0 20 20" aria-hidden className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <rect x="3" y="4.5" width="14" height="12.5" rx="2" />
+        <path strokeLinecap="round" d="M6.5 3.5v2M13.5 3.5v2M3.5 9h13" />
+      </svg>
+    ),
+  },
+  {
+    mode: 'archived',
+    label: 'Archived',
+    icon: (
+      <svg viewBox="0 0 20 20" aria-hidden className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 6.5h14M4.5 6.5l.8 8.6a1.6 1.6 0 0 0 1.6 1.4h6.2a1.6 1.6 0 0 0 1.6-1.4l.8-8.6M8 10h4" />
+      </svg>
+    ),
+  },
+];
+
+function MobileBottomNav({
+  view,
+  archivedCount,
+  onNavigate,
+}: {
+  view: ViewMode;
+  archivedCount: number;
+  onNavigate: (mode: ViewMode) => void;
+}) {
+  return (
+    <nav
+      aria-label="Primary navigation"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-hairline bg-surface/95 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur sm:hidden"
+    >
+      <div className="mx-auto flex max-w-md items-stretch justify-between gap-1">
+        {MOBILE_NAV_ITEMS.map((item) => {
+          const active = view === item.mode;
+          return (
+            <button
+              key={item.mode}
+              type="button"
+              onClick={() => onNavigate(item.mode)}
+              aria-current={active ? 'page' : undefined}
+              className={`inline-flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-medium transition ${
+                active ? 'bg-accent/10 text-accent' : 'text-muted hover:text-accent'
+              }`}
+            >
+              {item.icon}
+              <span className="truncate">
+                {item.label}
+                {item.mode === 'archived' && archivedCount > 0 ? ` · ${archivedCount}` : ''}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
