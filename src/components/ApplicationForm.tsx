@@ -221,13 +221,22 @@ export function ApplicationForm({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-950/60 p-0 sm:items-center sm:p-4 sm:py-8"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60"
       onClick={(event) => {
         // Backdrop click dismisses (a click that landed on the dimmed page
         // around the dialog, never one that bubbled out of the dialog itself).
         if (event.target === event.currentTarget) onClose();
       }}
     >
+      <div
+        className="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4 sm:py-8"
+        onClick={(event) => {
+          // The inner flex wrapper also needs to dismiss on backdrop clicks so
+          // that the area between the scroll container and the dialog panel
+          // still counts as "outside the dialog".
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
       <div
         role="dialog"
         aria-modal="true"
@@ -587,6 +596,7 @@ export function ApplicationForm({
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   );
