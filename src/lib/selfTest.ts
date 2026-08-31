@@ -1,4 +1,5 @@
 import { emptyJobApplication, normalizeJobApplication, STORAGE_KEY } from './normalize';
+import { collectBackup, parseBackupJson, runImport } from './backup';
 import { blobToArrayBuffer } from './blob';
 import { isFollowUpDue, toPlainDate, weekKeyOf } from './pipeline';
 import { bulkPurgeApplications, purgeApplication } from './storage';
@@ -12,8 +13,9 @@ import { LocalSettingsStore } from './storage/localSettingsStore';
  * The foundation is only done when persistence actually round-trips, so instead of
  * trusting the code by eye this runs the real adapter in the real browser: CRUD,
  * hide-on-delete, undo, archive, bulk edit, corrupt-data recovery, concurrent
- * writes, a Blob round-trip through IndexedDB and the attachment cascade that
- * Part 5 depends on.
+ * writes, a Blob round-trip through IndexedDB, the attachment cascade that
+ * Part 5 depends on, and Part 11's backup round-trip (export → wipe → import)
+ * through the same two stores.
  *
  * Each check gets its own localStorage key, because they run concurrently —
  * sharing one document would let `replaceAll` in one check clear another's rows.
@@ -426,6 +428,114 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       await settings.clear();
       assert(globalThis.localStorage.getItem(settingsKey) === null, 'isolated settings key was not cleaned up');
       return 'weekly goal round-trips on jat.settings.v1; applications document untouched';
+    }),
+
+    runCheck('backup export/import round-trips records and files', async (store) => {
+      if (typeof indexedDB === 'undefined') throw new SkipError('indexedDB unavailable in this context');
+      // Attachments are keyed by application id, so run-specific ids keep this
+      // check's blobs apart from every other check's — and from an earlier run's.
+      const stamp = `${SAMPLE}-${Date.now()}`;
+      const idA = `${stamp}-a`;
+      const idB = `${stamp}-b`;
+
+      try {
+        await attachments.removeAllFor(idA);
+        await attachments.removeAllFor(idB);
+
+        const resume = new TextEncoder().encode('%PDF-1.4 backup round-trip probe \u0000\u0001\u00fe');
+        await store.replaceAll([
+          emptyJobApplication({
+            id: idA,
+            companyName: 'Acme Robotics',
+            jobTitle: 'Staff Engineer',
+            applicationDate: '2026-01-14',
+            status: 'Interview',
+            // Archived on purpose: a backup that forgot the Archived tab would
+            // still pass a naive round-trip.
+            isArchived: true,
+            tags: ['qatar', 'referral'],
+            companyResearch: 'Series B, 120 people; substation work in Doha.',
+            notes: 'Referral from Dana.\nSecond line with a comma, and "quotes".',
+            jobLink: 'bayt.com/job/123',
+            matchScore: 82,
+          }),
+          emptyJobApplication({
+            id: idB,
+            companyName: 'Blue Harbor',
+            jobTitle: 'Frontend Engineer',
+            applicationDate: '2026-02-02',
+            status: 'Applied',
+          }),
+        ]);
+        await attachments.add({
+          applicationId: idA,
+          name: 'CV_Acme.pdf',
+          blob: new Blob([resume], { type: 'application/pdf' }),
+        });
+
+        const before = await store.all();
+        assert(before.length === 2, `fixture: 2 seeded records expected, got ${before.length}`);
+
+        // The export the user would actually download, from the real stores.
+        const exported = await collectBackup({ records: store, attachments }, '2026-08-30T00:00:00.000Z');
+        assert(exported.payload.applications.length === 2, 'the export dropped the archived row');
+        assert(exported.payload.files.length === 1, 'the attached file is not in the export');
+        assert(
+          exported.unreadableFiles.length === 0,
+          `the export could not read a file: ${exported.unreadableFiles.join(', ')}`,
+        );
+
+        const parsed = parseBackupJson(exported.json);
+        if (!parsed.ok) throw new Error(`the app's own export failed to parse: ${parsed.message}`);
+
+        // Emptiness is the point: the import has to put everything back by itself.
+        await store.replaceAll([]);
+        await attachments.removeAllFor(idA);
+        assert((await store.all()).length === 0, 'fixture: the store should be empty before the import');
+
+        const first = await runImport({ records: store, attachments }, parsed.backup);
+        assert(first.created === 2, `expected 2 records restored, got ${first.created}`);
+        assert(first.skippedDuplicates === 0, 'nothing was already here, so nothing should be skipped');
+        assert(first.remapped === 0, 'an empty store cannot already own those ids');
+        assert(first.filesWritten === 1, `expected 1 attachment restored, got ${first.filesWritten}`);
+        assert(first.fileErrors.length === 0, `an attachment failed to restore: ${first.fileErrors.join('; ')}`);
+
+        const after = await store.all();
+        assert(
+          JSON.stringify(after) === JSON.stringify(before),
+          'records did not come back field-for-field (ids, archive flag, research and tags included)',
+        );
+
+        const restored = await attachments.listFor(idA);
+        assert(restored.length === 1, `expected 1 restored file, got ${restored.length}`);
+        const meta = restored[0];
+        assert(meta?.name === 'CV_Acme.pdf', 'the restored file kept the wrong name');
+        const fetched = meta ? await attachments.get(meta.id) : null;
+        if (!fetched) throw new Error('the restored attachment has no bytes');
+        const roundTripped = new Uint8Array(await blobToArrayBuffer(fetched.blob));
+        assert(
+          roundTripped.length === resume.length,
+          `byte length changed: ${resume.length} → ${roundTripped.length}`,
+        );
+        assert(
+          roundTripped.every((byte, i) => byte === resume[i]),
+          'attachment bytes changed in transit (base64 or the normaliser is lossy)',
+        );
+        assert(fetched.mimeType === 'application/pdf', 'the restored file lost its mime type');
+
+        // The plan's own test, second half: re-importing the same file adds nothing.
+        const second = await runImport({ records: store, attachments }, parsed.backup);
+        assert(second.created === 0, `a re-import added ${second.created} records — duplicates`);
+        assert(second.skippedDuplicates === 2, `a re-import should skip both rows, skipped ${second.skippedDuplicates}`);
+        assert(second.filesWritten === 0, 'a re-import restored the attachment a second time');
+        assert((await attachments.listFor(idA)).length === 1, 'a re-import duplicated the attached file');
+        assert((await store.all()).length === 2, 'a re-import changed the record count');
+
+        return `${resume.length} bytes of CV and 2 records came back byte-for-byte from the app's own export; re-importing added 0 records and 0 files`;
+      } finally {
+        await attachments.removeAllFor(idA);
+        await attachments.removeAllFor(idB);
+      }
     }),
   ];
 

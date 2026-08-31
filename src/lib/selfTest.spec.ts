@@ -16,7 +16,7 @@ describe('runSelfTests() against a real storage stack', () => {
     const results = await runSelfTests();
     const failures = results.filter((r) => !r.ok).map((r) => `${r.name}: ${r.detail}`);
     expect(failures).toEqual([]);
-    expect(results.length).toBe(15); // one per foundation guarantee; add one when you add a check
+    expect(results.length).toBe(16); // one per foundation guarantee; add one when you add a check
 
     const blobCheck = results.find((r) => r.name === 'IndexedDB blob round-trip');
     expect(blobCheck, 'blob check must run in this environment').toBeDefined();
@@ -30,6 +30,14 @@ describe('runSelfTests() against a real storage stack', () => {
     expect(cascade, 'the attachment cascade check must be registered').toBeDefined();
     expect(cascade?.skipped, 'the cascade check must actually run here').toBe(false);
     expect(cascade?.ok, cascade?.detail).toBe(true);
+  });
+
+  it('proves Part 11: an export re-imported into an emptied store restores records and file bytes', async () => {
+    const results = await runSelfTests();
+    const backup = results.find((r) => r.name === 'backup export/import round-trips records and files');
+    expect(backup, 'the backup round-trip check must be registered').toBeDefined();
+    expect(backup?.skipped, 'the backup check must actually run here').toBe(false);
+    expect(backup?.ok, backup?.detail).toBe(true);
   });
 
   it('is isolated: no self-test keys leak, real data is untouched', async () => {
@@ -50,8 +58,11 @@ describe('runSelfTests() against a real storage stack', () => {
       expect(globalThis.localStorage.getItem(key), `${key} left behind`).toBeNull();
       expect(globalThis.localStorage.getItem(`${key}.corrupt`), `${key}.corrupt left behind`).toBeNull();
     }
-    // The Part 5 cascade check adds two more probe keys.
-    for (const suffix of ['permanent-delete-cascades-files-soft-delete-keeps-them']) {
+    // The Part 5 cascade check and Part 11's backup check each add their own key.
+    for (const suffix of [
+      'permanent-delete-cascades-files-soft-delete-keeps-them',
+      'backup-export-import-round-trips-records-and-files',
+    ]) {
       const key = `${SELF_TEST_PREFIX}${suffix}`;
       expect(globalThis.localStorage.getItem(key), `${key} left behind`).toBeNull();
     }

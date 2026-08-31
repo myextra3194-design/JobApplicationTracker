@@ -128,6 +128,41 @@ wins except for the locked decisions below.
   unselected-row-survives and duplicate/unknown-id cases; `src/lib/bulk.spec.ts`
   covers the pure merge/confirmation logic. No field names changed; the
   normaliser is untouched.
+  Part 11 is in: backup export/import, from the header's **Data** menu (a small
+  dropdown beside Add Application, so the list view stays clean). Export writes
+  `job-applications-backup-YYYY-MM-DD.json` from `records.all()` — every row,
+  `isArchived` and `deletedAt` included — with each attachment inlined as base64,
+  and offers a CSV of the structured fields (with a BOM, CRLF lines and RFC 4180
+  quoting), whose menu note says plainly that attached files are not in it because
+  CSV cannot hold binary data. An export over 20 MB asks first (`EXPORT_WARN_BYTES`
+  + `exportSizeNote`), because base64 makes the file heavy. Import **merges**: rows
+  whose `backupDedupeKey` (company + job title + application date, trimmed and
+  case-insensitive, all local rows considered so archived ones block a re-import)
+  is already here are skipped, and nothing is ever deleted or replaced — the
+  deliberately different sibling of `duplicates.ts`, which keys on company + title
+  and excludes archived/deleted rows for the add-form warning. A new row keeps its
+  id unless a local row already owns it, in which case a fresh one is minted and
+  that row's files are re-keyed before they are written; attachments are written
+  only after their record exists, the Part 5 ordering rule.
+  Everything backup-shaped is pure and in `src/lib/backup.ts` (payload shape +
+  parse, base64 both directions, the merge diff, the CSV text, the summary copy),
+  with two thin async helpers that are *handed* the stores — `collectBackup` and
+  `runImport` — so the component does upload/download only and the self-test can
+  run the same code against isolated stores. **No adapter capability was needed:**
+  the export reads `records.all()` + `attachments.listFor/get`, the import writes
+  through the existing `records.create(input)` (which honours a supplied id) and
+  `attachments.add`, and the import path deliberately never calls `replaceAll` — a
+  merge must not be able to rewrite rows it never looked at. The one cascade path is
+  untouched: a backup restores, it removes nothing. Corrupt or foreign files come
+  back as a readable message (`{ ok: false, message }`, never a throw), a bad
+  attachment is one line in the result while its record and the other files still
+  land, and every imported row passes through the single normaliser. The 16th
+  foundation check round-trips through the real stores — two records (one archived)
+  plus a CV, export, empty the store, import, records and file bytes identical, and
+  a second import adds zero records and zero files — and `src/lib/backup.spec.ts`
+  (41 tests) covers the payload/parse rules, base64 against the RFC 4648 vectors,
+  the merge decisions and the CSV quoting. No field names changed; the normaliser
+  is untouched.
 
 ---
 
