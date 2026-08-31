@@ -6,6 +6,7 @@ import { DataMenu } from './components/DataMenu';
 import { FilterBar } from './components/FilterBar';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SelfTestPanel } from './components/SelfTestPanel';
+import { ToastHost } from './components/ToastHost';
 import { UpcomingDashboard } from './components/UpcomingDashboard';
 import { archivedRows, countArchived } from './lib/archive';
 import { saveStagedAttachments } from './lib/attachments';
@@ -19,6 +20,7 @@ import {
 import { draftToInput, type ApplicationFormDraft } from './lib/form';
 import { applyQuery, DEFAULT_FILTERS, filterToQuery, type FilterState } from './lib/query';
 import { getStorage } from './lib/storage';
+import { pushToast } from './lib/toast';
 import type { ApplicationStatus, JobApplication } from './lib/types';
 
 type ViewMode = 'list' | 'board' | 'upcoming' | 'archived';
@@ -117,6 +119,7 @@ export default function App() {
       setFormOpen(false);
       setEditing(null);
       await reload();
+      pushToast(editing ? 'Application updated.' : 'Application saved.');
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -129,6 +132,7 @@ export default function App() {
     try {
       await storage.records.update(row.id, { status });
       await reload();
+      pushToast(`${row.companyName || 'Application'} moved to ${status}.`);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     }
@@ -141,6 +145,7 @@ export default function App() {
     try {
       await storage.records.setArchived(row.id, true);
       await reload();
+      pushToast(`${row.companyName || 'Application'} archived.`);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     }
@@ -150,6 +155,7 @@ export default function App() {
     try {
       await storage.records.setArchived(row.id, false);
       await reload();
+      pushToast(`${row.companyName || 'Application'} restored.`);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     }
@@ -168,6 +174,7 @@ export default function App() {
       // THE one cascade path: record + files, via purgeApplication.
       await storage.purge(row.id);
       await reload();
+      pushToast(`${label} permanently deleted.`);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     }
@@ -191,6 +198,7 @@ export default function App() {
         { status },
       );
       await reload();
+      pushToast(`${targets.length} application${targets.length === 1 ? '' : 's'} moved to ${status}.`);
       return true;
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
@@ -212,6 +220,7 @@ export default function App() {
         await storage.records.update(row.id, { tags: mergeTagIntoTags(row.tags, tag) });
       }
       await reload();
+      pushToast(`Added “${tag.trim()}” to ${targets.length} application${targets.length === 1 ? '' : 's'}.`);
       return true;
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
@@ -225,6 +234,7 @@ export default function App() {
     try {
       await storage.records.bulkPatch(ids, { isArchived: true });
       await reload();
+      pushToast(`${ids.length} application${ids.length === 1 ? '' : 's'} archived.`);
       return true;
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
@@ -240,6 +250,7 @@ export default function App() {
     try {
       await storage.bulkPurge(ids);
       await reload();
+      pushToast(`${ids.length} application${ids.length === 1 ? '' : 's'} permanently deleted.`);
       return true;
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
@@ -250,12 +261,12 @@ export default function App() {
   return (
     <div className="min-h-screen bg-canvas text-slate-200">
       <header className="border-b border-hairline bg-surface/60 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-5 py-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4 sm:px-5">
           <div className="flex size-9 items-center justify-center rounded-lg bg-blue-500/15 text-lg">📋</div>
           <div className="mr-auto">
             <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
             <p className="text-xs text-slate-400">
-              Part 11 of 12 — backup export / import, attachments included
+              Part 12 of 12 — polished, responsive, and local-first
             </p>
           </div>
           <DriverBadge driver={storage.driver} />
@@ -270,7 +281,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-5 px-5 py-6">
+      <main className="mx-auto flex min-w-0 max-w-6xl flex-col gap-5 px-4 py-5 sm:px-5 sm:py-6">
         {loadError ? (
           <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 font-mono text-xs text-red-200">
             {loadError}
@@ -324,6 +335,7 @@ export default function App() {
                 rows={listRows}
                 filtered={liveRows.length > 0}
                 onRowClick={openEdit}
+                onAdd={openAdd}
                 onArchive={(row) => void handleArchive(row)}
                 onBulkStatus={(ids, status) => handleBulkStatus(ids, status)}
                 onBulkTag={(ids, tag) => handleBulkTag(ids, tag)}
@@ -335,6 +347,7 @@ export default function App() {
                 matchIds={matchIds}
                 onStatusChange={(row, status) => void handleStatusChange(row, status)}
                 onCardClick={openEdit}
+                onAdd={openAdd}
               />
             ) : view === 'upcoming' ? (
               <UpcomingDashboard rows={liveRows} onOpen={openEdit} />
@@ -369,6 +382,7 @@ export default function App() {
         onClose={closeForm}
         onSave={handleSave}
       />
+      <ToastHost />
     </div>
   );
 }

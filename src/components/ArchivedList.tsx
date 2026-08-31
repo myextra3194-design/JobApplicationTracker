@@ -1,6 +1,8 @@
 import { BulkActionBar } from './BulkActionBar';
+import { MobileSelectAll } from './MobileSelectAll';
+import { StatusChip } from './StatusChip';
+import { TagChip } from './TagChip';
 import { useRowSelection } from './useRowSelection';
-import { STATUS_TONE } from '../lib/pipeline';
 import type { ApplicationStatus, JobApplication } from '../lib/types';
 
 interface ArchivedListProps {
@@ -25,8 +27,8 @@ function dash(value: string | null): string {
  * `getStorage().purge`.
  *
  * Part 10: rows multi-select with checkboxes; the bulk bar here shows status,
- * tag and "Delete selected permanently" — the archived rows are already
- * archived, so the plan gates bulk archive to the live list view.
+ * tag and "Delete selected permanently" — archived rows are already archived,
+ * so the plan gates bulk archive to the live list view.
  */
 export function ArchivedList({
   rows,
@@ -46,14 +48,24 @@ export function ArchivedList({
 
   if (rows.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-hairline bg-surface px-4 py-10 text-center text-sm text-slate-400">
-        No archived applications — archive one from the list view to keep your board tidy.
-      </p>
+      <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-hairline bg-surface px-4 py-12 text-center">
+        <p className="text-sm font-medium text-slate-200">No archived applications</p>
+        <p className="max-w-md text-xs text-slate-500">
+          Archived applications stay out of your active pipeline and can be restored whenever you need them.
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-2">
+      <MobileSelectAll
+        count={selection.count}
+        allSelected={selection.allSelected}
+        someSelected={selection.someSelected}
+        onToggleAll={selection.toggleAll}
+        label="archived applications"
+      />
       {selection.count > 0 ? (
         <BulkActionBar
           selectedCount={selection.count}
@@ -63,7 +75,20 @@ export function ArchivedList({
         />
       ) : null}
 
-      <div className="overflow-x-auto rounded-xl border border-hairline bg-surface">
+      <div className="flex flex-col gap-2 sm:hidden">
+        {rows.map((row) => (
+          <ArchivedCard
+            key={row.id}
+            row={row}
+            checked={selection.selectedIds.has(row.id)}
+            onToggle={() => selection.toggle(row.id)}
+            onRestore={onRestore}
+            onDeletePermanent={onDeletePermanent}
+          />
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-xl border border-hairline bg-surface sm:block">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-hairline text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
@@ -85,9 +110,7 @@ export function ArchivedList({
               <th className="px-3 py-2 font-medium">Applied Date</th>
               <th className="px-3 py-2 font-medium">Archived</th>
               <th className="px-3 py-2 font-medium">Tags</th>
-              <th className="px-3 py-2 font-medium">
-                <span className="sr-only">Actions</span>
-              </th>
+              <th className="px-3 py-2 font-medium"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -111,45 +134,23 @@ export function ArchivedList({
                   </td>
                   <td className="px-3 py-2 font-medium text-slate-100">{row.companyName || '—'}</td>
                   <td className="px-3 py-2 text-slate-300">{row.jobTitle || '—'}</td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[row.status].chip}`}
-                    >
-                      <span className={`size-1.5 rounded-full ${STATUS_TONE[row.status].dot}`} />
-                      {row.status}
-                    </span>
-                  </td>
+                  <td className="px-3 py-2"><StatusChip status={row.status} /></td>
                   <td className="px-3 py-2 font-mono text-xs text-slate-400">{dash(row.applicationDate)}</td>
                   <td className="px-3 py-2 font-mono text-xs text-slate-400">{row.updatedAt.slice(0, 10)}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {row.tags.length === 0 ? (
-                        <span className="text-slate-600">—</span>
-                      ) : (
-                        row.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full border border-hairline bg-surface-raised px-1.5 py-0.5 text-[11px] text-slate-300"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </td>
+                  <td className="px-3 py-2"><TagList tags={row.tags} /></td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
                         type="button"
                         onClick={() => onRestore(row)}
-                        className="rounded-md px-2 py-1 text-xs text-sky-300 hover:bg-sky-500/10 hover:text-sky-200"
+                        className="whitespace-nowrap rounded-md px-2 py-1 text-xs text-sky-300 transition hover:bg-sky-500/10 hover:text-sky-200"
                       >
                         Restore
                       </button>
                       <button
                         type="button"
                         onClick={() => onDeletePermanent(row)}
-                        className="rounded-md px-2 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                        className="whitespace-nowrap rounded-md px-2 py-1 text-xs text-red-400 transition hover:bg-red-500/10"
                       >
                         Delete permanently
                       </button>
@@ -163,4 +164,67 @@ export function ArchivedList({
       </div>
     </div>
   );
+}
+
+function ArchivedCard({
+  row,
+  checked,
+  onToggle,
+  onRestore,
+  onDeletePermanent,
+}: {
+  row: JobApplication;
+  checked: boolean;
+  onToggle: () => void;
+  onRestore: (row: JobApplication) => void;
+  onDeletePermanent: (row: JobApplication) => void;
+}) {
+  return (
+    <article className={`rounded-xl border border-hairline bg-surface p-3 shadow-sm ${checked ? 'border-sky-500/50 bg-sky-500/10' : ''}`}>
+      <div className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          aria-label={`Select ${row.companyName || row.jobTitle || row.id}`}
+          className="mt-1 size-4 shrink-0 accent-sky-500"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold text-slate-50">{row.companyName || '—'}</h2>
+              <p className="truncate text-xs text-slate-400">{row.jobTitle || '—'}</p>
+            </div>
+            <StatusChip status={row.status} />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-hairline pt-2 text-[11px]">
+            <p className="text-slate-500">Applied <span className="font-mono text-slate-300">{dash(row.applicationDate)}</span></p>
+            <p className="text-slate-500">Archived <span className="font-mono text-slate-300">{row.updatedAt.slice(0, 10)}</span></p>
+          </div>
+          {row.tags.length > 0 ? <div className="mt-2"><TagList tags={row.tags} /></div> : null}
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap justify-end gap-1 border-t border-hairline pt-2">
+        <button
+          type="button"
+          onClick={() => onRestore(row)}
+          className="rounded-md px-2 py-1 text-xs text-sky-300 transition hover:bg-sky-500/10 hover:text-sky-200"
+        >
+          Restore
+        </button>
+        <button
+          type="button"
+          onClick={() => onDeletePermanent(row)}
+          className="rounded-md px-2 py-1 text-xs text-red-400 transition hover:bg-red-500/10"
+        >
+          Delete permanently
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function TagList({ tags }: { tags: readonly string[] }) {
+  if (tags.length === 0) return <span className="text-slate-600">—</span>;
+  return <div className="flex flex-wrap gap-1">{tags.map((tag) => <TagChip key={tag} tag={tag} />)}</div>;
 }

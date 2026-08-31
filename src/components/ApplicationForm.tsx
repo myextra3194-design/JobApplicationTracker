@@ -22,6 +22,7 @@ import {
   type ApplicationFormDraft,
 } from '../lib/form';
 import type { AttachmentMeta } from '../lib/storage/adapter';
+import { TagChip } from './TagChip';
 import { downloadDateAsIcs } from '../lib/ics';
 import {
   FINAL_RESULT_SUGGESTIONS,
@@ -363,20 +364,12 @@ export function ApplicationForm({
             <span>Tags</span>
             <div className="flex flex-wrap gap-1.5">
               {draft.tags.map((tag) => (
-                <span
+                <TagChip
                   key={tag}
-                  className="inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-raised px-2 py-0.5 text-xs text-slate-200"
-                >
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => patch('tags', removeTag(draft.tags, tag))}
-                    className="text-slate-500 hover:text-slate-200"
-                    aria-label={`Remove tag ${tag}`}
-                  >
-                    ×
-                  </button>
-                </span>
+                  tag={tag}
+                  className="px-2 text-xs"
+                  onRemove={() => patch('tags', removeTag(draft.tags, tag))}
+                />
               ))}
             </div>
             <input
@@ -582,8 +575,8 @@ function DateWithCalendar({
   return (
     <div className="flex flex-col gap-1 text-xs text-slate-400">
       <span>{label}</span>
-      <div className="flex items-center gap-2">
-        <input type="date" value={value} onChange={(e) => onChange(e.target.value)} className={inputClass()} />
+      <div className="flex flex-wrap items-center gap-2">
+        <input type="date" value={value} onChange={(e) => onChange(e.target.value)} className={`${inputClass()} min-w-0 flex-1`} />
         {value ? (
           <button
             type="button"
