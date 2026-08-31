@@ -229,7 +229,7 @@ export function ApplicationForm({
       }}
     >
       <div
-        className="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4 sm:py-8"
+        className="flex min-h-full items-center justify-center p-4 sm:py-8"
         onClick={(event) => {
           // The inner flex wrapper also needs to dismiss on backdrop clicks so
           // that the area between the scroll container and the dialog panel
@@ -244,7 +244,7 @@ export function ApplicationForm({
         onKeyDown={(event) => {
           if (event.key === 'Escape') onClose();
         }}
-        className="w-full max-w-2xl rounded-t-2xl border border-hairline bg-surface p-5 shadow-2xl sm:rounded-2xl"
+        className="w-full max-w-2xl rounded-2xl border border-hairline bg-surface p-5 shadow-2xl"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
