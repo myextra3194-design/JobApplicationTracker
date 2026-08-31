@@ -46,9 +46,10 @@ worker (`public/sw.js`), so you can install it to your home screen and it starts
 
 > ⚠️ **Your data lives in the browser you typed it into.** `localStorage` is per browser *and*
 > per install: the phone's data is not the desktop's data, and on iPhone the installed
-> home-screen app keeps its own storage separate from Safari's tab. There is no sync —
-> that is what Part 11's JSON export/import is for (later). Don't test on two devices
-> expecting to see the same rows.
+> home-screen app keeps its own storage separate from Safari's tab. There is no sync.
+> To move a tracker between browsers, use the header's **Data ▾** menu: **Export (JSON,
+> with files)** on one, **Import from a JSON backup** on the other — the import merges, so
+> it will not wipe what is already there, and rows you already have are skipped.
 
 ## Where your data lives
 
@@ -82,6 +83,7 @@ src/lib/
   normalize.ts    every read/write passes through here; junk input cannot reach a view
   query.ts        filter/sort/aggregate as pure functions
   attachments.ts  Part 5 — size/type rules, label→filename, save/download/remove
+  backup.ts       Part 11 — export payload, base64, CSV text, merge-import diff
   blob.ts         byte access with a FileReader fallback
   storage/
     adapter.ts            RecordStore + AttachmentStore interfaces   ← the seam
@@ -99,10 +101,12 @@ SQLite implementation of the same two interfaces can be swapped in behind
 Named Part 1 helpers (`getAllApplications`, `saveApplication`, `deleteApplication`) are
 thin wrappers over that seam.
 
-`src/lib/selfTest.ts` runs 13 checks against the real storage stack in the browser —
+`src/lib/selfTest.ts` runs 16 checks against the real storage stack in the browser —
 CRUD, undo-delete, archive, bulk edits, concurrent writes, corrupt-data recovery, a
-byte-exact file round-trip and the attachment cascade (files survive archive and
-undo-delete, and go with the record on permanent delete). The home page shows the results; each check uses its own
+byte-exact file round-trip, the attachment cascade (files survive archive and
+undo-delete, and go with the record on permanent delete), and a backup round-trip:
+export, empty the store, re-import, and assert the records and the attachment bytes
+come back identical with a second import adding nothing. The home page shows the results; each check uses its own
 isolated key, so running it never touches your data.
 
 ## Stack
@@ -113,15 +117,19 @@ state, and it lives behind the storage adapter.
 
 ## Status
 
-Parts 1–9 of 12 are in. The data model, storage seam and verification harness (Part 1);
+Parts 1–11 of 12 are in. The data model, storage seam and verification harness (Part 1);
 the add/edit list view (Part 2); the List/Board toggle with the seven-column Kanban board
 (Part 3); search/filter/sort over both views (Part 4); PDF/DOC/DOCX attachments keyed by
 application id with a per-file 5 MB limit (Part 5); clickable job links, notes/research
 previews, the final-result nudge and the duplicate warning (Part 6); the Upcoming
 follow-up/interview dashboard with per-event `.ics` (Part 7); the analytics dashboard and
-Monday-based weekly goal (Part 8); and **archive, restore & permanent delete** (Part 9) —
+Monday-based weekly goal (Part 8); **archive, restore & permanent delete** (Part 9) —
 the list's Delete is now Archive, an Archived tab offers Restore and "Delete permanently"
 (which cascades the attachments via `getStorage().purge`), and an "N archived" count sits
-beside the filters. GitHub Pages deploy + PWA installability is in. The spec is
+beside the filters; checkbox multi-select with bulk status/tag/archive and bulk permanent
+delete (Part 10); and **backup export/import** (Part 11) — the header's Data menu writes a
+JSON backup with attachments as base64 (or a CSV of the structured fields) and reads a
+previous backup back in, merging rather than wiping. GitHub Pages deploy + PWA
+installability is in. The spec is
 [`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
 progress and locked decisions are in [`PLAN.md`](PLAN.md).

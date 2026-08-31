@@ -46,9 +46,10 @@ export function SelfTestPanel() {
       </div>
       <p className="mt-1 text-xs leading-relaxed text-slate-400">
         Exercises the live storage adapter end to end — CRUD, undo-delete, archive, bulk edits, corrupt-data
-        recovery, concurrent writes, an IndexedDB blob round-trip and the attachment cascade (files survive
-        archive and undo-delete, and go with the record on permanent delete). Runs against its own isolated
-        key, so your own data is never touched.
+        recovery, concurrent writes, an IndexedDB blob round-trip, the attachment cascade (files survive
+        archive and undo-delete, and go with the record on permanent delete) and the backup round-trip (export
+        → empty → import restores the records and the file bytes, and a second import adds nothing). Runs
+        against its own isolated key, so your own data is never touched.
       </p>
 
       {error && (

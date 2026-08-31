@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApplicationForm } from './components/ApplicationForm';
 import { ApplicationList } from './components/ApplicationList';
 import { ArchivedList } from './components/ArchivedList';
+import { DataMenu } from './components/DataMenu';
 import { FilterBar } from './components/FilterBar';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SelfTestPanel } from './components/SelfTestPanel';
@@ -38,6 +39,12 @@ type ViewMode = 'list' | 'board' | 'upcoming' | 'archived';
  * live list (status/tag everywhere, archive confirmed with its count), and
  * bulk permanent delete on the Archived tab — `bulkPurge` loops the one
  * `purgeApplication` cascade rather than growing a second delete path.
+ *
+ * Part 11 adds the header's Data menu: a JSON backup (every row plus every
+ * attached file, base64'd) and a CSV of the structured fields, and an import that
+ * merges — never wipes — through the same `records.create` / `attachments.add`
+ * seams the add form uses. Export reads the unfiltered `records.all()` snapshot,
+ * so the Archived tab and the undo window are in the backup too.
  */
 export default function App() {
   const storage = getStorage();
@@ -248,10 +255,11 @@ export default function App() {
           <div className="mr-auto">
             <h1 className="text-base font-semibold tracking-tight text-slate-50">Job Application Tracker</h1>
             <p className="text-xs text-slate-400">
-              Part 10 of 12 — bulk status, tags, archive &amp; permanent delete
+              Part 11 of 12 — backup export / import, attachments included
             </p>
           </div>
           <DriverBadge driver={storage.driver} />
+          <DataMenu onImported={() => void reload()} />
           <button
             type="button"
             onClick={openAdd}
