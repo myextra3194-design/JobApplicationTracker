@@ -24,17 +24,19 @@ export function UpcomingDashboard({ rows, onOpen }: UpcomingDashboardProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-3">
         <header className="flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-100">Follow-ups due</h2>
-          <span className="font-mono text-[11px] text-slate-500">{followUps.length}</span>
+          <h2 className="text-sm font-semibold text-ink">Follow-ups due</h2>
+          <span className="rounded-full bg-surface-raised px-2 py-0.5 font-mono text-[11px] text-muted">
+            {followUps.length}
+          </span>
         </header>
         {followUps.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-hairline bg-surface px-4 py-8 text-center text-sm text-slate-400">
+          <p className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-8 text-center text-sm text-muted shadow-sm">
             Nothing due.
           </p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-2.5">
             {followUps.map((row) => {
               const overdue = row.followUpDate ? daysFromToday(row.followUpDate, today) < 0 : false;
               return (
@@ -53,17 +55,19 @@ export function UpcomingDashboard({ rows, onOpen }: UpcomingDashboardProps) {
         )}
       </section>
 
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-3">
         <header className="flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-100">Upcoming interviews</h2>
-          <span className="font-mono text-[11px] text-slate-500">{interviews.length}</span>
+          <h2 className="text-sm font-semibold text-ink">Upcoming interviews</h2>
+          <span className="rounded-full bg-surface-raised px-2 py-0.5 font-mono text-[11px] text-muted">
+            {interviews.length}
+          </span>
         </header>
         {interviews.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-hairline bg-surface px-4 py-8 text-center text-sm text-slate-400">
+          <p className="rounded-2xl border border-dashed border-hairline bg-surface px-4 py-8 text-center text-sm text-muted shadow-sm">
             No upcoming interviews.
           </p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-2.5">
             {interviews.map((row) => (
               <DashboardItem
                 key={row.id}
@@ -100,28 +104,32 @@ function DashboardItem({
   onOpen: (row: JobApplication) => void;
 }) {
   const dateClass =
-    tone === 'overdue' ? 'text-red-300' : tone === 'due' ? 'text-amber-200' : 'text-sky-200';
+    tone === 'overdue'
+      ? 'text-red-700 dark:text-red-300'
+      : tone === 'due'
+        ? 'text-amber-700 dark:text-amber-200'
+        : 'text-accent';
   const statusBorder = STATUS_TONE[row.status].column;
 
   return (
-    <li className={`flex items-stretch gap-2 rounded-xl border bg-surface ${statusBorder}`}>
+    <li className={`flex items-stretch gap-2 rounded-2xl border bg-surface shadow-sm ${statusBorder}`}>
       <button
         type="button"
         onClick={() => onOpen(row)}
-        className="min-w-0 flex-1 px-3 py-2.5 text-left"
+        className="min-w-0 flex-1 px-3.5 py-3 text-left"
       >
         <div className="flex flex-wrap items-center gap-2">
-          <p className="truncate text-sm font-medium text-slate-50">{row.companyName || '—'}</p>
+          <p className="truncate text-sm font-medium text-ink">{row.companyName || '—'}</p>
           <StatusChip status={row.status} />
         </div>
-        <p className="truncate text-xs text-slate-400">{row.jobTitle || '—'}</p>
-        <p className={`mt-1 font-mono text-[11px] ${dateClass}`}>
+        <p className="truncate text-xs text-muted">{row.jobTitle || '—'}</p>
+        <p className={`mt-1.5 font-mono text-[11px] ${dateClass}`}>
           {dateLabel} {date ?? '—'}
-          {extra ? <span className="ml-2 font-sans text-slate-400">· {extra}</span> : null}
+          {extra ? <span className="ml-2 font-sans text-muted">· {extra}</span> : null}
         </p>
       </button>
       {date ? (
-        <div className="flex items-center pr-2">
+        <div className="flex items-center pr-2.5">
           <button
             type="button"
             onClick={() =>
@@ -132,7 +140,7 @@ function DashboardItem({
                 uid: `${row.id}-${date}`,
               })
             }
-            className="shrink-0 rounded-md border border-hairline bg-surface/60 px-2 py-1 text-[11px] text-slate-300 hover:bg-surface-raised hover:text-slate-100"
+            className="shrink-0 rounded-lg border border-hairline bg-surface px-2 py-1 text-[11px] text-muted shadow-sm transition hover:bg-surface-raised hover:text-ink"
           >
             Add to calendar
           </button>

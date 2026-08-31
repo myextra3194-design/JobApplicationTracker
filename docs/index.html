@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#0b0f16" />
     <meta name="description" content="Track job applications from Saved to Offer: follow-ups, interviews, recruiter contacts, CV attachments, and a dashboard." />
     <!-- PWA: manifest + install icons. Paths are relative so the same build
@@ -18,14 +18,14 @@
     <meta name="apple-mobile-web-app-title" content="Job Tracker" />
     <title>Job Application Tracker</title>
     <style>
-      /* Avoid a white flash before Tailwind paints. */
-      html,
-      body {
+      /* Avoid a white flash before Tailwind paints; the app switches html to
+         light after loading the persisted theme through the settings seam. */
+      html {
         background: #0b0f16;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-CLSFQtXk.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-C8BzdiDb.css">
+    <script type="module" crossorigin src="./assets/index-dzUE9ReS.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CqWng4-y.css">
   </head>
   <body>
     <div id="root"></div>

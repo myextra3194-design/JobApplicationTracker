@@ -29,38 +29,38 @@ export const IN_PROGRESS_STATUSES: readonly ApplicationStatus[] = [
 export const STATUS_TONE: Record<ApplicationStatus, { dot: string; chip: string; column: string }> = {
   Saved: {
     dot: 'bg-slate-400',
-    chip: 'bg-slate-400/15 text-slate-300',
-    column: 'border-slate-400/30',
+    chip: 'bg-slate-400/15 text-slate-700 dark:text-slate-300',
+    column: 'border-slate-400/40',
   },
   Applied: {
     dot: 'bg-blue-400',
-    chip: 'bg-blue-500/15 text-blue-300',
-    column: 'border-blue-500/30',
+    chip: 'bg-blue-500/15 text-blue-800 dark:text-blue-300',
+    column: 'border-blue-500/40',
   },
   Shortlisted: {
     dot: 'bg-purple-400',
-    chip: 'bg-purple-500/15 text-purple-300',
-    column: 'border-purple-500/30',
+    chip: 'bg-purple-500/15 text-purple-800 dark:text-purple-300',
+    column: 'border-purple-500/40',
   },
   Interview: {
     dot: 'bg-amber-400',
-    chip: 'bg-amber-500/15 text-amber-300',
-    column: 'border-amber-500/30',
+    chip: 'bg-amber-500/15 text-amber-900 dark:text-amber-300',
+    column: 'border-amber-500/40',
   },
   Offer: {
     dot: 'bg-green-400',
-    chip: 'bg-green-500/15 text-green-300',
-    column: 'border-green-500/30',
+    chip: 'bg-green-500/15 text-green-800 dark:text-green-300',
+    column: 'border-green-500/40',
   },
   Rejected: {
     dot: 'bg-red-400',
-    chip: 'bg-red-500/15 text-red-300',
-    column: 'border-red-500/30',
+    chip: 'bg-red-500/15 text-red-800 dark:text-red-300',
+    column: 'border-red-500/40',
   },
   Withdrawn: {
     dot: 'bg-slate-600',
-    chip: 'bg-slate-600/15 text-slate-400',
-    column: 'border-slate-600/30',
+    chip: 'bg-slate-600/15 text-slate-600 dark:text-slate-400',
+    column: 'border-slate-600/40',
   },
 };
 

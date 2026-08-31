@@ -48,7 +48,7 @@ export function FilterBar({ rows, filters, onChange }: FilterBarProps) {
         onChange={(e) => patch({ search: e.target.value })}
         placeholder="Search company or job title…"
         aria-label="Search company or job title"
-        className="min-w-44 flex-1 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500"
+        className="min-w-44 flex-1 rounded-xl border border-hairline bg-surface px-3 py-2 text-sm text-ink shadow-sm placeholder:text-faint"
       />
 
       <MultiSelect
@@ -58,13 +58,13 @@ export function FilterBar({ rows, filters, onChange }: FilterBarProps) {
         onToggle={(value) => patch({ statuses: toggleIn(filters.statuses, value) })}
       />
 
-      <label className="flex items-center gap-1.5 text-xs text-slate-400">
+      <label className="flex items-center gap-1.5 text-xs text-muted">
         <span className="hidden sm:inline">Portal</span>
         <select
           value={filters.jobPortal}
           onChange={(e) => patch({ jobPortal: e.target.value })}
           aria-label="Filter by job portal"
-          className="max-w-36 rounded-lg border border-hairline bg-surface px-2 py-1.5 text-xs text-slate-200"
+          className="max-w-36 rounded-xl border border-hairline bg-surface px-2 py-2 text-xs text-ink shadow-sm"
         >
           <option value="">All portals</option>
           {portals.map((portal) => (
@@ -82,13 +82,13 @@ export function FilterBar({ rows, filters, onChange }: FilterBarProps) {
         onToggle={(value) => patch({ tags: toggleIn(filters.tags, value) })}
       />
 
-      <label className="flex items-center gap-1.5 text-xs text-slate-400">
+      <label className="flex items-center gap-1.5 text-xs text-muted">
         <span className="hidden sm:inline">Sort</span>
         <select
           value={filters.sortKey}
           onChange={(e) => patch({ sortKey: e.target.value as SortKey })}
           aria-label="Sort by"
-          className="rounded-lg border border-hairline bg-surface px-2 py-1.5 text-xs text-slate-200"
+          className="rounded-xl border border-hairline bg-surface px-2 py-2 text-xs text-ink shadow-sm"
         >
           {SORT_OPTIONS.map((option) => (
             <option key={option.key} value={option.key}>
@@ -106,7 +106,7 @@ export function FilterBar({ rows, filters, onChange }: FilterBarProps) {
             ? 'Ascending — tap for descending'
             : 'Descending — tap for ascending'
         }
-        className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:border-sky-500/50 hover:text-slate-100"
+        className="rounded-xl border border-hairline bg-surface px-2.5 py-2 text-xs font-medium text-muted shadow-sm transition hover:border-accent/50 hover:text-accent"
       >
         {filters.sortDir === 'asc' ? '↑ Asc' : '↓ Desc'}
       </button>
@@ -116,7 +116,7 @@ export function FilterBar({ rows, filters, onChange }: FilterBarProps) {
         onClick={() => onChange({ ...DEFAULT_FILTERS })}
         disabled={!active}
         title={active ? 'Reset search, filters and sort' : 'Nothing to clear yet'}
-        className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:border-red-500/50 hover:text-red-300 disabled:cursor-default disabled:opacity-40 disabled:hover:border-hairline disabled:hover:text-slate-300"
+        className="rounded-xl border border-hairline bg-surface px-2.5 py-2 text-xs font-medium text-muted shadow-sm transition hover:border-red-500/50 hover:text-red-700 dark:hover:text-red-300 disabled:cursor-default disabled:opacity-40 disabled:hover:border-hairline disabled:hover:text-muted"
       >
         Clear filters
       </button>
@@ -170,31 +170,31 @@ function MultiSelect<T extends string>({
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         aria-haspopup="true"
-        className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+        className={`rounded-xl border px-3 py-2 text-xs font-medium shadow-sm transition ${
           selected.length > 0
-            ? 'border-sky-500/50 bg-sky-500/10 text-sky-200'
-            : 'border-hairline bg-surface text-slate-300 hover:border-sky-500/50'
+            ? 'border-accent/50 bg-accent/10 text-accent'
+            : 'border-hairline bg-surface text-muted hover:border-accent/50 hover:text-accent'
         }`}
       >
         {label} ▾
       </button>
       {open ? (
-        <div className="absolute left-0 z-20 mt-1 max-h-64 w-48 overflow-y-auto rounded-lg border border-hairline bg-surface-raised p-1 shadow-xl">
+        <div className="absolute left-0 z-30 mt-1 max-h-64 w-52 overflow-y-auto rounded-xl border border-hairline bg-surface p-1.5 shadow-xl">
           {options.length === 0 ? (
-            <p className="px-2 py-1.5 text-[11px] text-slate-500">Nothing to filter on yet</p>
+            <p className="px-2 py-1.5 text-[11px] text-faint">Nothing to filter on yet</p>
           ) : (
             options.map((option) => (
               <label
                 key={option}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-slate-200 hover:bg-surface"
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-ink transition hover:bg-surface-raised"
               >
                 <input
                   type="checkbox"
                   checked={selected.includes(option)}
                   onChange={() => onToggle(option)}
-                  className="accent-sky-500"
+                  className="accent-[#6d28d9]"
                 />
-                <span className="truncate">{option}</span>
+                <span className="truncate text-muted">{option}</span>
               </label>
             ))
           )}

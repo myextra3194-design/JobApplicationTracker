@@ -78,8 +78,12 @@ export interface AttachmentStore {
   totalBytes(): Promise<number>;
 }
 
+/** The two supported application themes. Persisted inside `jat.settings.v1`. */
+export type ThemeMode = 'dark' | 'light';
+
 export interface TrackerSettings {
   weeklyGoal: number;
+  theme: ThemeMode;
 }
 
 export interface SettingsStore {

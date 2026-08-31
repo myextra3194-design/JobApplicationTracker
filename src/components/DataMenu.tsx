@@ -27,15 +27,15 @@ interface DataMenuProps {
 type Note = { tone: 'info' | 'warn' | 'error'; text: string };
 
 const TONE_CLASS: Record<Note['tone'], string> = {
-  info: 'border-hairline bg-surface text-slate-300',
-  warn: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
-  error: 'border-rose-500/40 bg-rose-500/10 text-rose-200',
+  info: 'border-hairline bg-surface-raised text-muted',
+  warn: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200',
+  error: 'border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200',
 };
 
 const NOTE_TEXT_CLASS: Record<Note['tone'], string> = {
-  info: 'text-sky-200',
-  warn: 'text-amber-200',
-  error: 'text-rose-200',
+  info: 'text-accent',
+  warn: 'text-amber-800 dark:text-amber-200',
+  error: 'text-red-800 dark:text-red-200',
 };
 
 /**
@@ -179,14 +179,14 @@ export function DataMenu({ onImported }: DataMenuProps) {
         aria-expanded={open}
         aria-haspopup="true"
         title="Backup: export, CSV and import"
-        className="rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm font-medium text-slate-300 hover:border-sky-500/50 hover:text-slate-100"
+        className="rounded-xl border border-hairline bg-surface px-3 py-1.5 text-sm font-medium text-muted shadow-sm transition hover:border-accent/50 hover:text-accent"
       >
         Data ▾
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-30 mt-1 w-[calc(100vw-2rem)] max-w-80 rounded-lg border border-hairline bg-surface-raised p-2 shadow-xl">
-          <p className="px-1 pb-1 text-[11px] uppercase tracking-wide text-slate-500">Backup</p>
+        <div className="absolute right-0 z-40 mt-2 max-h-[calc(100vh-7rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-hairline bg-surface p-2 shadow-2xl">
+          <p className="px-2 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-faint">Backup</p>
 
           <MenuAction
             busy={busy}
@@ -219,7 +219,7 @@ export function DataMenu({ onImported }: DataMenuProps) {
             <p
               role="status"
               aria-live="polite"
-              className={`mt-2 whitespace-pre-line rounded-md border px-2 py-1.5 text-[11px] leading-relaxed ${TONE_CLASS[note.tone]} ${NOTE_TEXT_CLASS[note.tone]}`}
+              className={`mt-2 whitespace-pre-line rounded-xl border px-2.5 py-1.5 text-[11px] leading-relaxed ${TONE_CLASS[note.tone]} ${NOTE_TEXT_CLASS[note.tone]}`}
             >
               {note.text}
             </p>
@@ -242,16 +242,16 @@ function MenuAction({
   busy: boolean;
 }) {
   return (
-    <div className="rounded-md px-1 py-1">
+    <div className="rounded-xl px-1 py-1">
       <button
         type="button"
         onClick={onClick}
         disabled={busy}
-        className="block w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-slate-200 hover:bg-surface hover:text-sky-200 disabled:opacity-50"
+        className="block w-full rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-ink transition hover:bg-surface-raised hover:text-accent disabled:opacity-50"
       >
         {busy ? 'Working…' : label}
       </button>
-      <p className="px-2 text-[11px] leading-relaxed text-slate-500">{hint}</p>
+      <p className="px-2.5 text-[11px] leading-relaxed text-muted">{hint}</p>
     </div>
   );
 }

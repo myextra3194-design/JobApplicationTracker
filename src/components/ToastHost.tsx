@@ -2,10 +2,10 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { dismissToast, toastQueue, type ToastTone } from '../lib/toast';
 
 const TONE_CLASS: Record<ToastTone, string> = {
-  success: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100',
-  info: 'border-sky-500/40 bg-sky-500/10 text-sky-100',
-  warning: 'border-amber-500/40 bg-amber-500/10 text-amber-100',
-  error: 'border-red-500/40 bg-red-500/10 text-red-100',
+  success: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-100',
+  info: 'border-accent/40 bg-accent/10 text-accent',
+  warning: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-100',
+  error: 'border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-100',
 };
 
 /** React bridge for the small in-memory queue in `lib/toast.ts`. */
@@ -26,7 +26,7 @@ export function ToastHost() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-stretch gap-2 sm:inset-x-auto sm:right-5 sm:w-96">
+    <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex flex-col items-stretch gap-2 sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-96">
       {toasts.map((toast) => (
         <div
           key={toast.id}

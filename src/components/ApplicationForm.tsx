@@ -197,21 +197,24 @@ export function ApplicationForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 py-8">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-950/60 p-0 sm:items-center sm:p-4 sm:py-8">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-2xl rounded-xl border border-hairline bg-surface p-5 shadow-xl"
+        className="w-full max-w-2xl rounded-t-2xl border border-hairline bg-surface p-5 shadow-2xl sm:rounded-2xl"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
-          <h2 id={titleId} className="text-base font-semibold text-slate-50">
-            {mode}
-          </h2>
+          <div>
+            <h2 id={titleId} className="text-base font-semibold text-ink">
+              {mode}
+            </h2>
+            <p className="mt-0.5 text-xs text-muted">Company, role and process details in one place.</p>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-surface-raised hover:text-slate-200"
+            className="rounded-lg px-2 py-1 text-xs text-muted transition hover:bg-surface-raised hover:text-ink"
           >
             Close
           </button>
@@ -221,7 +224,7 @@ export function ApplicationForm({
           {duplicateMatches.length > 0 ? (
             <p
               role="status"
-              className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs leading-relaxed text-amber-200"
+              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200"
             >
               You already applied to this role — continue anyway?
             </p>
@@ -360,7 +363,7 @@ export function ApplicationForm({
             />
           </Field>
 
-          <div className="flex flex-col gap-1 text-xs text-slate-400">
+          <div className="flex flex-col gap-1 text-xs text-muted">
             <span>Tags</span>
             <div className="flex flex-wrap gap-1.5">
               {draft.tags.map((tag) => (
@@ -396,7 +399,7 @@ export function ApplicationForm({
                 ))}
               </datalist>
               {needsFinalResultNudge(draft.status, draft.finalResult) ? (
-                <span className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] leading-relaxed text-sky-200">
+                <span className="rounded-lg border border-accent/30 bg-accent/10 px-2 py-1 text-[11px] leading-relaxed text-accent">
                   Marked {draft.status} — want to record the final result too? Saving works either way.
                 </span>
               ) : null}
@@ -422,8 +425,8 @@ export function ApplicationForm({
 
           <section className="flex flex-col gap-2 border-t border-hairline pt-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="text-xs font-medium text-slate-200">Attachments</h3>
-              <span className="text-[11px] text-slate-500">
+              <h3 className="text-xs font-medium text-ink">Attachments</h3>
+              <span className="text-[11px] text-muted">
                 PDF, DOC or DOCX · {formatBytes(MAX_ATTACHMENT_BYTES)} each
               </span>
             </div>
@@ -431,25 +434,25 @@ export function ApplicationForm({
             {fileError ? (
               <p
                 role="alert"
-                className="rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-xs leading-relaxed whitespace-pre-line text-red-200"
+                className="rounded-xl border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-xs leading-relaxed whitespace-pre-line text-red-800 dark:text-red-200"
               >
                 {fileError}
               </p>
             ) : null}
 
             {existing === null ? (
-              <p className="text-xs text-slate-500">Loading files…</p>
+              <p className="text-xs text-muted">Loading files…</p>
             ) : existing.length > 0 ? (
               <ul className="flex flex-col gap-1.5">
                 {existing.map((meta) => (
                   <li
                     key={meta.id}
-                    className="flex flex-wrap items-center gap-2 rounded-md border border-hairline bg-surface-raised px-2.5 py-1.5"
+                    className="flex flex-wrap items-center gap-2 rounded-xl border border-hairline bg-surface-raised px-2.5 py-1.5"
                   >
-                    <span className="min-w-0 flex-1 truncate text-sm text-slate-100" title={meta.name}>
+                    <span className="min-w-0 flex-1 truncate text-sm text-ink" title={meta.name}>
                       {meta.name}
                     </span>
-                    <span className="shrink-0 font-mono text-[11px] text-slate-500">{formatBytes(meta.size)}</span>
+                    <span className="shrink-0 font-mono text-[11px] text-muted">{formatBytes(meta.size)}</span>
                     <button
                       type="button"
                       onClick={() => void onDownload(meta)}
@@ -477,7 +480,7 @@ export function ApplicationForm({
                 {draft.files.map((item) => (
                   <li
                     key={item.key}
-                    className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-blue-500/40 bg-blue-500/5 px-2.5 py-1.5"
+                    className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-accent/40 bg-accent/5 px-2.5 py-1.5"
                   >
                     <input
                       value={item.label}
@@ -486,10 +489,10 @@ export function ApplicationForm({
                       placeholder="Label"
                       aria-label={`Label for ${item.file.name}`}
                     />
-                    <span className="min-w-0 flex-1 truncate text-xs text-slate-300" title={item.file.name}>
+                    <span className="min-w-0 flex-1 truncate text-xs text-muted" title={item.file.name}>
                       {item.file.name}
                     </span>
-                    <span className="shrink-0 font-mono text-[11px] text-slate-500">
+                    <span className="shrink-0 font-mono text-[11px] text-muted">
                       {formatBytes(item.file.size)}
                     </span>
                     <button
@@ -509,7 +512,7 @@ export function ApplicationForm({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg border border-hairline bg-surface-raised px-3 py-1.5 text-sm text-slate-200 hover:border-blue-500/50 hover:bg-surface-raised/80"
+                className="rounded-xl border border-hairline bg-surface-raised px-3 py-1.5 text-sm font-medium text-ink shadow-sm hover:border-accent/50"
               >
                 Attach resume/CV
               </button>
@@ -522,7 +525,7 @@ export function ApplicationForm({
                 className="hidden"
                 aria-label="Attach resume/CV"
               />
-              <span className="text-[11px] text-slate-500">
+              <span className="text-[11px] text-muted">
                 {initial
                   ? 'Resume + cover letter both allowed; new files save with this application.'
                   : 'Files are saved once the application is added.'}
@@ -534,14 +537,14 @@ export function ApplicationForm({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-hairline px-3 py-1.5 text-sm text-slate-300 hover:bg-surface-raised"
+              className="rounded-xl border border-hairline px-3 py-1.5 text-sm font-medium text-muted hover:bg-surface-raised hover:text-ink"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              className="gradient-accent rounded-xl px-3 py-1.5 text-sm font-semibold shadow-md"
             >
               {saving ? 'Saving…' : initial ? 'Save changes' : 'Add application'}
             </button>
@@ -573,7 +576,7 @@ function DateWithCalendar({
   applicationId?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1 text-xs text-slate-400">
+    <div className="flex flex-col gap-1 text-xs text-muted">
       <span>{label}</span>
       <div className="flex flex-wrap items-center gap-2">
         <input type="date" value={value} onChange={(e) => onChange(e.target.value)} className={`${inputClass()} min-w-0 flex-1`} />
@@ -588,7 +591,7 @@ function DateWithCalendar({
                 uid: applicationId ? `${applicationId}-${value}` : undefined,
               })
             }
-            className="shrink-0 rounded-md border border-hairline px-2 py-1.5 text-xs text-slate-300 hover:bg-surface-raised hover:text-slate-100"
+            className="shrink-0 rounded-xl border border-hairline px-2 py-1.5 text-xs text-muted shadow-sm hover:bg-surface-raised hover:text-ink"
           >
             Add to calendar
           </button>
@@ -612,26 +615,26 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className={`flex flex-col gap-1 text-xs text-slate-400 ${className}`}>
+    <label className={`flex flex-col gap-1 text-xs text-muted ${className}`}>
       <span>
         {label}
-        {required ? <span className="ml-0.5 text-red-400">*</span> : null}
+        {required ? <span className="ml-0.5 text-red-500">*</span> : null}
       </span>
       {children}
-      {error ? <span className="text-red-400">{error}</span> : null}
+      {error ? <span className="text-red-700 dark:text-red-300">{error}</span> : null}
     </label>
   );
 }
 
 const FILE_ACTION =
-  'rounded-md border border-hairline px-2 py-1 text-xs text-slate-300 hover:bg-surface hover:text-slate-100 disabled:opacity-50';
+  'rounded-xl border border-hairline px-2 py-1 text-xs text-muted hover:bg-surface hover:text-ink disabled:opacity-50';
 
 const FILE_ACTION_DANGER =
-  'rounded-md px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50';
+  'rounded-xl px-2 py-1 text-xs text-red-700 hover:bg-red-500/10 disabled:opacity-50 dark:text-red-300';
 
 function inputClass(invalid?: boolean | string): string {
   return [
-    'w-full rounded-md border bg-surface-raised px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-600',
+    'w-full rounded-xl border bg-surface-raised px-2.5 py-1.5 text-sm text-ink placeholder:text-faint',
     invalid ? 'border-red-500/70' : 'border-hairline',
   ].join(' ');
 }

@@ -60,6 +60,9 @@ describe('App final-pass browser flow', () => {
     const storage = getStorage();
     const rows = await storage.records.all();
     if (rows.length > 0) await storage.bulkPurge(rows.map((row) => row.id));
+    // The theme toggle writes through the settings seam; reset it so a later
+    // smoke case always starts from the app's dark default.
+    globalThis.localStorage.removeItem('jat.settings.v1');
     await act(async () => {
       root?.unmount();
     });
@@ -189,6 +192,39 @@ describe('App final-pass browser flow', () => {
     expect(new Uint8Array(await blobToArrayBuffer(restoredFile!.blob))).toEqual(
       new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]),
     );
+  });
+
+  it('loads dark, toggles to light, persists the choice and shows the active empty state', async () => {
+    const storage = getStorage();
+    await storage.records.replaceAll([]);
+
+    await act(async () => {
+      root = createRoot(host);
+      root.render(createElement(App));
+      await tick();
+    });
+    await waitUntil(() => document.body.textContent?.includes('List View') === true, 'the app loaded');
+    await waitUntil(() => document.documentElement.classList.contains('dark') === true, 'the dark theme applied');
+    expect(document.body.textContent).toContain('No applications yet — add your first one');
+
+    const lightButton = document.querySelector<HTMLButtonElement>('button[aria-label="Switch to light mode"]');
+    expect(lightButton).not.toBeNull();
+    await act(async () => {
+      lightButton?.click();
+      await tick();
+    });
+    await waitUntil(async () => (await storage.settings.get()).theme === 'light', 'the light theme persisted');
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+
+    const darkButton = document.querySelector<HTMLButtonElement>('button[aria-label="Switch to dark mode"]');
+    expect(darkButton).not.toBeNull();
+    await act(async () => {
+      darkButton?.click();
+      await tick();
+    });
+    await waitUntil(async () => (await storage.settings.get()).theme === 'dark', 'the dark preference round-tripped');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 });
 
