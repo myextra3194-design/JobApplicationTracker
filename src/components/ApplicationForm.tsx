@@ -14,6 +14,7 @@ import { findDuplicates } from '../lib/duplicates';
 import {
   addTag,
   applicationToDraft,
+  commitPendingTag,
   emptyFormDraft,
   formHasErrors,
   needsFinalResultNudge,
@@ -57,6 +58,12 @@ export function ApplicationForm({
   const resultListId = useId();
   const companyRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Synchronous submit lock. `saving` is a prop that only updates after React
+  // re-renders, so two submit events dispatched back-to-back (a double click, or
+  // Enter pressed twice before the button disables) would BOTH pass a
+  // `if (saving) return` check and create the record twice. A ref flips in the
+  // same tick, so the second submission is dropped before it starts.
+  const submitInFlight = useRef(false);
   const [draft, setDraft] = useState<ApplicationFormDraft>(emptyFormDraft);
   const [tagInput, setTagInput] = useState('');
   const [errors, setErrors] = useState(validateApplicationForm(emptyFormDraft()));
@@ -69,6 +76,7 @@ export function ApplicationForm({
 
   useEffect(() => {
     if (!open) return;
+    submitInFlight.current = false;
     setDraft(initial ? applicationToDraft(initial) : emptyFormDraft());
     setTagInput('');
     setErrors({});
@@ -189,19 +197,44 @@ export function ApplicationForm({
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const nextErrors = validateApplicationForm(draft);
+    // One save in flight at a time: the ref guard is synchronous, so a second
+    // submit event in the same tick cannot start a second `records.create`.
+    if (saving || submitInFlight.current) return;
+    // A tag typed but never committed with Enter must not be dropped by the
+    // submit itself — it joins the draft here, exactly as pressing Enter would.
+    const submitted = commitPendingTag(draft, tagInput);
+    if (submitted !== draft) {
+      setDraft(submitted);
+      setTagInput('');
+    }
+    const nextErrors = validateApplicationForm(submitted);
     setErrors(nextErrors);
     setShowErrors(true);
     if (formHasErrors(nextErrors)) return;
-    await onSave(draft);
+    submitInFlight.current = true;
+    try {
+      await onSave(submitted);
+    } finally {
+      submitInFlight.current = false;
+    }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-950/60 p-0 sm:items-center sm:p-4 sm:py-8">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-950/60 p-0 sm:items-center sm:p-4 sm:py-8"
+      onClick={(event) => {
+        // Backdrop click dismisses (a click that landed on the dimmed page
+        // around the dialog, never one that bubbled out of the dialog itself).
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onClose();
+        }}
         className="w-full max-w-2xl rounded-t-2xl border border-hairline bg-surface p-5 shadow-2xl sm:rounded-2xl"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -299,6 +332,7 @@ export function ApplicationForm({
             </Field>
             <DateWithCalendar
               label="Follow-up date"
+              kind="follow-up"
               value={draft.followUpDate}
               onChange={(value) => patch('followUpDate', value)}
               companyName={draft.companyName}
@@ -307,6 +341,7 @@ export function ApplicationForm({
             />
             <DateWithCalendar
               label="Interview date"
+              kind="interview"
               value={draft.interviewDate}
               onChange={(value) => patch('interviewDate', value)}
               companyName={draft.companyName}
@@ -404,14 +439,16 @@ export function ApplicationForm({
                 </span>
               ) : null}
             </Field>
-            <Field label="Match score (0–100)">
+            <Field label="Match score (0–100)" error={showErrors ? errors.matchScore : undefined}>
+              {/* No native min/max: they would make the browser swallow the
+                  submit with its own bubble, and the normaliser would then
+                  clamp the value anyway. The app's own validation is the one
+                  gate, with the same inline error style as every other field. */}
               <input
                 type="number"
-                min={0}
-                max={100}
                 value={draft.matchScore}
                 onChange={(e) => patch('matchScore', e.target.value)}
-                className={inputClass()}
+                className={inputClass(showErrors && errors.matchScore)}
               />
             </Field>
             <Field label="CV version used" className="sm:col-span-2">
@@ -562,6 +599,7 @@ export function ApplicationForm({
  */
 function DateWithCalendar({
   label,
+  kind,
   value,
   onChange,
   companyName,
@@ -569,6 +607,8 @@ function DateWithCalendar({
   applicationId,
 }: {
   label: string;
+  /** Which date this is — keeps the .ics UID distinct per event kind. */
+  kind: 'follow-up' | 'interview';
   value: string;
   onChange: (value: string) => void;
   companyName: string;
@@ -588,7 +628,12 @@ function DateWithCalendar({
                 companyName,
                 jobTitle,
                 date: value,
-                uid: applicationId ? `${applicationId}-${value}` : undefined,
+                // The kind is part of the UID on purpose: a follow-up and an
+                // interview on the SAME day of the SAME application must not
+                // share a UID, or a calendar import silently overwrites one
+                // with the other. The draft prefix keeps unsaved-form exports
+                // from colliding with a saved row's events too.
+                uid: `${applicationId ?? 'draft'}-${kind}-${value}`,
               })
             }
             className="shrink-0 rounded-xl border border-hairline px-2 py-1.5 text-xs text-muted shadow-sm hover:bg-surface-raised hover:text-ink"

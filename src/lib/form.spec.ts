@@ -3,6 +3,7 @@ import { emptyJobApplication } from './normalize';
 import {
   addTag,
   applicationToDraft,
+  commitPendingTag,
   draftToInput,
   emptyFormDraft,
   finalResultIsFilled,
@@ -44,6 +45,33 @@ describe('validateApplicationForm', () => {
     expect(ok).toEqual({});
     expect(formHasErrors(ok)).toBe(false);
   });
+
+  it('rejects a match score outside 0-100 or not numeric, instead of silently clamping it', () => {
+    // The normaliser would clamp these to 100/0 — the form must say no instead
+    // of saving a different number from the one the user typed.
+    for (const bad of ['250', '-5', '1e3', '12.5.5', 'abc']) {
+      const errors = validateApplicationForm({
+        ...emptyFormDraft(),
+        companyName: 'Acme',
+        jobTitle: 'Engineer',
+        matchScore: bad,
+      });
+      expect(errors.matchScore, `matchScore ${bad} should be rejected`).toBeDefined();
+      expect(formHasErrors(errors)).toBe(true);
+    }
+
+    // Blank (not scored), the boundaries and decimals inside the range pass.
+    for (const good of ['', '  ', '0', '100', '71', '71.5']) {
+      const errors = validateApplicationForm({
+        ...emptyFormDraft(),
+        companyName: 'Acme',
+        jobTitle: 'Engineer',
+        matchScore: good,
+      });
+      expect(errors.matchScore, `matchScore ${good} should be accepted`).toBeUndefined();
+      expect(formHasErrors(errors)).toBe(false);
+    }
+  });
 });
 
 describe('tag chips', () => {
@@ -53,6 +81,23 @@ describe('tag chips', () => {
     expect(original).toEqual(['Remote']);
     expect(addTag(original, '   ')).toEqual(['Remote']);
     expect(addTag(original, 'remote')).toEqual(['Remote']);
+  });
+
+  it('commitPendingTag keeps a typed-but-uncommitted tag from being dropped by the submit', () => {
+    const draft = emptyFormDraft();
+    // A tag typed into the input with no Enter press joins the draft on submit.
+    const committed = commitPendingTag(draft, '  Referral  ');
+    expect(committed.tags).toEqual(['Referral']);
+    expect(committed).not.toBe(draft);
+
+    // Blank and duplicate pending tags return the SAME draft object, so the
+    // form can skip a pointless state write.
+    expect(commitPendingTag(draft, '   ')).toBe(draft);
+    expect(commitPendingTag(draft, '')).toBe(draft);
+    const tagged = { ...draft, tags: ['Referral'] };
+    expect(commitPendingTag(tagged, 'referral')).toBe(tagged);
+    // The input draft is never mutated.
+    expect(draft.tags).toEqual([]);
   });
 
   it('removes by exact spelling and no-ops when missing', () => {

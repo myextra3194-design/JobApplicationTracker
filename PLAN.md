@@ -194,6 +194,39 @@ wins except for the locked decisions below.
   theme/light toggle smoke flow added to `src/app.smoke.spec.ts`, and the original
   end-to-end smoke flow bring the suite to 17 files / 180 tests with no new
   dependency and no backend/state/component library.
+- Add-flow fix pass (2026-08-31, post-Part-12): an audit of the Add/Edit
+  Application form found five real defects, all reproduced in the jsdom smoke
+  harness before fixing and now locked by regression tests (18 files / 183
+  tests). ① A tag typed into the tag input but never committed with Enter was
+  silently dropped by the submit — `commitPendingTag` in `src/lib/form.ts` now
+  folds it into the draft exactly as Enter would, and is referentially stable so
+  a blank/duplicate pending tag causes no state churn. ② Two submit events in
+  one tick (double click / double Enter before the disabled `saving` prop
+  re-rendered) both reached `records.create` and saved the row twice; the form
+  now holds a synchronous `submitInFlight` ref, which flips in the same tick, and
+  `App.handleSave` re-guards on `saving`. ③ If `records.create` succeeded but
+  `saveStagedAttachments` failed (quota), the add form stayed open in create
+  mode, so the user's retry created a **duplicate record** (re-proven: 2 rows
+  named "Acme"). The attachment write is now contained: the form closes, the row
+  reloads, and an error toast + banner say to re-attach from the edit form —
+  `records.create` can never run twice for one submit. A failure *before* the
+  record exists still leaves the form open with the draft intact, where a retry
+  is safe. ④ `matchScore` out of 0–100 was silently clamped by the normaliser
+  (250→100, −5→0); `validateApplicationForm` now rejects it inline, and the
+  input's native `min`/`max` were dropped because the browser's own constraint
+  validation swallowed the submit with its own bubble, which would have made the
+  app-level error unreachable. ⑤ A follow-up and an interview on the *same* day
+  exported two `.ics` files with the same `UID` (`${id}-${date}`), so importing
+  both into one calendar overwrote the first event; the UID now carries the event
+  kind (`${id}-follow-up-${date}` / `${id}-interview-${date}`, `draft-` prefix in
+  the unsaved form) in both the form and the Upcoming dashboard. The dialog also
+  gained Escape-key and backdrop-click dismissal (both blocked while saving), and
+  `SelfTestPanel` stopped setting state after unmount — the source of the one
+  unhandled `window is not defined` rejection `npm test` used to report. No
+  field names, status values, storage keys or cascade paths changed; `dist/` and
+  `docs/` were rebuilt in sync (the service worker needs no `CACHE_VERSION` bump:
+  navigation is network-first and the hashed JS/CSS chunk names moved on their
+  own, so the next load picks the new build up by itself).
 
 ---
 

@@ -95,9 +95,31 @@ describe('App final-pass browser flow', () => {
 
     const dates = [...document.querySelectorAll<HTMLInputElement>('input[type="date"]')];
     await changeControl(dates[0]!, toPlainDate(new Date()));
+    // Follow-up and interview deliberately share a date: their two "Add to
+    // calendar" exports must carry distinct UIDs, or importing both into one
+    // calendar silently overwrites the first event with the second.
     await changeControl(dates[1]!, toPlainDate(new Date()));
-    await changeControl(dates[2]!, '2099-01-01');
-    await clickButton('Add to calendar');
+    await changeControl(dates[2]!, toPlainDate(new Date()));
+    const calendarButtons = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
+      (element) => element.textContent?.trim() === 'Add to calendar',
+    );
+    expect(calendarButtons).toHaveLength(2);
+    lastDownload = null;
+    await act(async () => {
+      calendarButtons[0]!.click();
+      await tick();
+    });
+    const followUpIcs = await readFileAsText(lastDownload!);
+    lastDownload = null;
+    await act(async () => {
+      calendarButtons[1]!.click();
+      await tick();
+    });
+    const interviewIcs = await readFileAsText(lastDownload!);
+    const uidOf = (text: string) => text.split('\r\n').find((line) => line.startsWith('UID:'));
+    expect(uidOf(followUpIcs)).toContain('follow-up');
+    expect(uidOf(interviewIcs)).toContain('interview');
+    expect(uidOf(followUpIcs)).not.toBe(uidOf(interviewIcs));
 
     const file = new File([new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55])], 'resume.pdf', {
       type: 'application/pdf',
@@ -192,6 +214,104 @@ describe('App final-pass browser flow', () => {
     expect(new Uint8Array(await blobToArrayBuffer(restoredFile!.blob))).toEqual(
       new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]),
     );
+  });
+
+  it('adds without losing a pending tag, without double-saving, and without duplicating a row when attachments fail', async () => {
+    const storage = getStorage();
+    await storage.records.replaceAll([]);
+
+    await act(async () => {
+      root = createRoot(host);
+      root.render(createElement(App));
+      await tick();
+    });
+    await waitUntil(() => document.body.textContent?.includes('List View') === true, 'the app loaded');
+
+    // A tag typed into the tag input but never committed with Enter must be
+    // committed by the submit itself, not silently dropped.
+    await clickButton('Add Application');
+    await waitUntil(() => document.querySelector('[role="dialog"]') !== null, 'the add form opened');
+    await changeControl(findField('Company name'), 'Gimlet Media');
+    await changeControl(findField('Job title'), 'Podcast Producer');
+    await changeControl(document.querySelector<HTMLInputElement>('input[aria-label="Add tag"]')!, 'remote');
+    // Deliberately no Enter press here.
+
+    // An out-of-range match score is rejected inline instead of being silently
+    // clamped to 100 by the normaliser.
+    await changeControl(findField('Match score'), '250');
+    await clickButton('Add application');
+    await waitUntil(() => document.body.textContent?.includes('Match score must be between 0 and 100') === true, 'the score error showed');
+    expect(await storage.records.all()).toHaveLength(0);
+    await changeControl(findField('Match score'), '80');
+
+    // Two submissions back-to-back (a double click / double Enter) must produce
+    // exactly one record: the second submit is dropped synchronously.
+    const form = document.querySelector('form')!;
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await tick();
+    });
+    await waitUntil(async () => (await storage.records.all()).length === 1, 'exactly one application saved');
+    const row = (await storage.records.all())[0]!;
+    expect(row.tags).toEqual(['remote']);
+    expect(row.matchScore).toBe(80);
+    await waitUntil(() => document.querySelector('[role="dialog"]') === null, 'the form closed');
+
+    // Escape dismisses the form without saving anything.
+    await clickButton('Add Application');
+    await waitUntil(() => document.querySelector('[role="dialog"]') !== null, 'the add form reopened');
+    await act(async () => {
+      document.querySelector('[role="dialog"]')!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+      await tick();
+    });
+    await waitUntil(() => document.querySelector('[role="dialog"]') === null, 'Escape closed the form');
+    expect(await storage.records.all()).toHaveLength(1);
+
+    // When the record is created but its attachment cannot be stored, the form
+    // must still close with one row: leaving it open in create mode would let a
+    // retry run records.create again and duplicate the application.
+    const failingAdd = vi
+      .spyOn(storage.attachments, 'add')
+      .mockImplementation(async () => {
+        throw new Error('simulated attachment failure');
+      });
+    try {
+      await clickButton('Add Application');
+      await waitUntil(() => document.querySelector('[role="dialog"]') !== null, 'the add form reopened');
+      await changeControl(findField('Company name'), 'Blue Harbor');
+      await changeControl(findField('Job title'), 'Frontend Engineer');
+      const file = new File([new Uint8Array([37, 80, 68, 70])], 'resume.pdf', { type: 'application/pdf' });
+      const fileInput = document.querySelector<HTMLInputElement>('input[aria-label="Attach resume/CV"]')!;
+      Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] });
+      await act(async () => {
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+        await tick();
+      });
+      await clickButton('Add application');
+      await waitUntil(async () => (await storage.records.all()).length === 2, 'the second row saved');
+      await waitUntil(() => document.querySelector('[role="dialog"]') === null, 'the form closed despite the attachment failure');
+      expect(document.body.textContent).toContain('attachments could not be stored');
+      expect(document.body.textContent).toContain('simulated attachment failure');
+      expect((await storage.records.all()).filter((item) => item.companyName === 'Blue Harbor')).toHaveLength(1);
+    } finally {
+      failingAdd.mockRestore();
+    }
+
+    // The survivor is editable and can take the file on the retry, by hand.
+    await clickButton('Add Application');
+    await waitUntil(() => document.querySelector('[role="dialog"]') !== null, 'the add form reopened');
+    await changeControl(findField('Company name'), 'Northwind');
+    await changeControl(findField('Job title'), 'Product Designer');
+    await clickButton('Add application');
+    await waitUntil(async () => (await storage.records.all()).length === 3, 'the third row saved');
+    expect((await storage.records.all()).map((item) => item.companyName).sort()).toEqual([
+      'Blue Harbor',
+      'Gimlet Media',
+      'Northwind',
+    ]);
   });
 
   it('loads dark, toggles to light, persists the choice and shows the active empty state', async () => {
