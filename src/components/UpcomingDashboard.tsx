@@ -1,6 +1,7 @@
 import { AnalyticsPanel } from './AnalyticsPanel';
+import { StatusChip } from './StatusChip';
 import { downloadDateAsIcs } from '../lib/ics';
-import { daysFromToday } from '../lib/pipeline';
+import { daysFromToday, STATUS_TONE } from '../lib/pipeline';
 import { dueFollowUps, upcomingInterviews } from '../lib/upcoming';
 import type { JobApplication } from '../lib/types';
 
@@ -42,7 +43,7 @@ export function UpcomingDashboard({ rows, onOpen }: UpcomingDashboardProps) {
                   row={row}
                   dateLabel="Follow-up"
                   date={row.followUpDate}
-                  extra={row.status}
+                  extra=""
                   tone={overdue ? 'overdue' : 'due'}
                   onOpen={onOpen}
                 />
@@ -98,23 +99,21 @@ function DashboardItem({
   tone: 'overdue' | 'due' | 'interview';
   onOpen: (row: JobApplication) => void;
 }) {
-  const toneClass =
-    tone === 'overdue'
-      ? 'border-red-500/50 bg-red-500/10'
-      : tone === 'due'
-        ? 'border-amber-500/40 bg-amber-500/10'
-        : 'border-sky-500/30 bg-sky-500/10';
   const dateClass =
     tone === 'overdue' ? 'text-red-300' : tone === 'due' ? 'text-amber-200' : 'text-sky-200';
+  const statusBorder = STATUS_TONE[row.status].column;
 
   return (
-    <li className={`flex items-stretch gap-2 rounded-xl border ${toneClass}`}>
+    <li className={`flex items-stretch gap-2 rounded-xl border bg-surface ${statusBorder}`}>
       <button
         type="button"
         onClick={() => onOpen(row)}
         className="min-w-0 flex-1 px-3 py-2.5 text-left"
       >
-        <p className="truncate text-sm font-medium text-slate-50">{row.companyName || '—'}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate text-sm font-medium text-slate-50">{row.companyName || '—'}</p>
+          <StatusChip status={row.status} />
+        </div>
         <p className="truncate text-xs text-slate-400">{row.jobTitle || '—'}</p>
         <p className={`mt-1 font-mono text-[11px] ${dateClass}`}>
           {dateLabel} {date ?? '—'}

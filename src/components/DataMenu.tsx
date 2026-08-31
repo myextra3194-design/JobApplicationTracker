@@ -17,6 +17,7 @@ import {
 } from '../lib/backup';
 import { toPlainDate } from '../lib/pipeline';
 import { getStorage } from '../lib/storage';
+import { pushToast } from '../lib/toast';
 
 interface DataMenuProps {
   /** Run after an import wrote anything, so App re-reads its snapshot. */
@@ -94,8 +95,11 @@ export function DataMenu({ onImported }: DataMenuProps) {
             ? `\n${missing.length} file(s) were listed by a record but not in the file store, so they are not in the backup:\n${missing.join('\n')}`
             : ''),
       });
+      pushToast(`${filename} exported${missing.length > 0 ? ' with missing files' : ''}.`, missing.length > 0 ? 'warning' : 'success');
     } catch (err) {
-      setNote({ tone: 'error', text: `Export failed: ${messageOf(err)}` });
+      const message = `Export failed: ${messageOf(err)}`;
+      setNote({ tone: 'error', text: message });
+      pushToast(message, 'error');
     } finally {
       setBusy(false);
     }
@@ -114,8 +118,11 @@ export function DataMenu({ onImported }: DataMenuProps) {
         tone: 'info',
         text: `${filename} — ${rows.length} application${rows.length === 1 ? '' : 's'} of structured fields only, no attached files.`,
       });
+      pushToast(`${filename} exported.`, 'success');
     } catch (err) {
-      setNote({ tone: 'error', text: `Export failed: ${messageOf(err)}` });
+      const message = `Export failed: ${messageOf(err)}`;
+      setNote({ tone: 'error', text: message });
+      pushToast(message, 'error');
     } finally {
       setBusy(false);
     }
@@ -139,9 +146,17 @@ export function DataMenu({ onImported }: DataMenuProps) {
           `${file.name}: ${importSummary(result, parsed.backup)}` +
           (result.fileErrors.length > 0 ? `\n${result.fileErrors.join('\n')}` : ''),
       });
+      pushToast(
+        result.fileErrors.length > 0
+          ? `Import finished with ${result.fileErrors.length} file warning${result.fileErrors.length === 1 ? '' : 's'}.`
+          : 'Import complete.',
+        result.fileErrors.length > 0 ? 'warning' : 'success',
+      );
       if (result.created > 0 || result.filesWritten > 0) onImported();
     } catch (err) {
-      setNote({ tone: 'error', text: `Import failed: ${messageOf(err)}` });
+      const message = `Import failed: ${messageOf(err)}`;
+      setNote({ tone: 'error', text: message });
+      pushToast(message, 'error');
     } finally {
       setBusy(false);
     }
@@ -170,7 +185,7 @@ export function DataMenu({ onImported }: DataMenuProps) {
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-30 mt-1 w-80 rounded-lg border border-hairline bg-surface-raised p-2 shadow-xl">
+        <div className="absolute right-0 z-30 mt-1 w-[calc(100vw-2rem)] max-w-80 rounded-lg border border-hairline bg-surface-raised p-2 shadow-xl">
           <p className="px-1 pb-1 text-[11px] uppercase tracking-wide text-slate-500">Backup</p>
 
           <MenuAction

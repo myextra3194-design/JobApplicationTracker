@@ -61,7 +61,7 @@ wins except for the locked decisions below.
 - Data is per browser install: phone ≠ desktop ≠ iPhone-home-screen-app. Sync is out
   of scope until Part 11's export/import; nobody should plan on cross-device
   continuity.
-- Repo state check (2026-08-30): this checkout contains **Parts 1–9**. Part 3 was
+- Repo state check (2026-08-31): this checkout contains **Parts 1–12**. Part 3 was
   rebuilt to spec after the old board branch was found never merged: List/Board
   toggle at the top of the page, the seven columns in pipeline order, non-archived
   only, and status change via a dropdown on the card (no drag-and-drop) — same
@@ -160,9 +160,25 @@ wins except for the locked decisions below.
   foundation check round-trips through the real stores — two records (one archived)
   plus a CV, export, empty the store, import, records and file bytes identical, and
   a second import adds zero records and zero files — and `src/lib/backup.spec.ts`
-  (41 tests) covers the payload/parse rules, base64 against the RFC 4648 vectors,
+  (42 tests) covers the payload/parse rules, base64 against the RFC 4648 vectors,
   the merge decisions and the CSV quoting. No field names changed; the normaliser
   is untouched.
+  Part 12 is in: the visual pass keeps `STATUS_TONE` as the one status palette,
+  adds a shared deterministic `tagColor` helper plus `TagChip`, and makes List
+  and Archived switch from tables to stacked cards below the 640px `sm` breakpoint.
+  The board retains fixed-width columns with horizontal touch scrolling, and the
+  bulk bar gets a card-layout "Select all" control that remains usable at 360px.
+  List and Board empty states now include the Add action; Archived keeps its own
+  distinct empty copy. `ToastHost` is mounted once and consumes the in-memory,
+  auto-expiring, de-duped queue in `src/lib/toast.ts`; save, status moves,
+  archive/restore, permanent and bulk deletes, bulk edits, import, and both export
+  paths all confirm after success while the existing confirmation dialogs and Data
+  menu notes remain. No storage seam or self-test capability changed: the harness
+  remains at 16 checks. The service-worker shell cache was bumped from `jat-v1` to
+  `jat-v2` for the new appearance. `tagColor.spec.ts`, `toast.spec.ts`, and the
+  React createRoot browser smoke flow in `src/app.smoke.spec.ts` bring the suite
+  to 16 files / 175 tests; the smoke flow also covers the requested end-to-end
+  status, calendar, dashboard, archive, bulk, export and attachment restore pass.
 
 ---
 
@@ -215,6 +231,13 @@ via `getStorage()`:
    the form cannot drift from the message the tests assert. `downloadNameFor`
    derives the stored filename from the label the user types, which is why
    "Download" hands back `Resume.pdf` instead of `cv_final_v3.pdf`.
+5. **The reproducible Part 12 end-to-end flow uses `createRoot` + jsdom +
+   fake-indexeddb rather than a literal second browser profile.** It still drives
+   the rendered App controls (including the form, board, calendar download,
+   dashboard, archive/restore, bulk bar, Data menu export/import) and wipes through
+   the storage seam before re-importing, which is the clean-profile equivalent;
+   attachment bytes are asserted after the round-trip. A live Vite preview was also
+   started and served the shell successfully.
 
 ---
 
@@ -248,7 +271,7 @@ From the spec, not the earlier reconstruction.
 | 9 | Archive + undo-delete | Archive/restore; permanent delete + attachment cascade; archived tab |
 | 10 | Bulk actions | Multi-select, bulk status/tag/archive; bulk permanent-delete on Archived |
 | 11 | Backup export/import | JSON (attachments as base64) + CSV (no files); merge import, skip exact dupes |
-| 12 | Visual polish | Part 12 palette, responsive list/board, empty states, toasts, end-to-end pass |
+| 12 | Visual polish + final pass | Shared status/tag visuals, responsive cards and board, empty states, confirmation toasts, final validation |
 
 Each part: implement → `tsc -b` + `vitest run` + `npm run build` → summary → **stop**.
 
