@@ -71,6 +71,13 @@ with a label you type that becomes the download filename.
   can delete a record and forget its blobs. Archive and undo-delete keep the files.
 - **Corrupt data is never destroyed.** An unreadable document is copied to
   `jat.applications.v1.corrupt` and the app starts empty instead of throwing.
+- **Notifications & alarms (Part 13).** The header bell lists due follow-ups and
+  upcoming interviews with an unread badge, and hosts the reminder settings:
+  on/off switches, the time of day reminders fire at, an interview lead-day
+  reminder (0–7 days), and an opt-in for OS pop-ups. The alarm engine fires
+  in-app toasts (and pop-ups, if allowed) while the app is open — local-first
+  means there is no server to wake a closed tab. Seen/fired state lives in
+  capped `jat.notifications.v1` / `jat.alarms.v1` journals.
 - To wipe everything: DevTools → Application → clear site data.
 
 ## Architecture
@@ -84,6 +91,9 @@ src/lib/
   query.ts        filter/sort/aggregate as pure functions
   attachments.ts  Part 5 — size/type rules, label→filename, save/download/remove
   backup.ts       Part 11 — export payload, base64, CSV text, merge-import diff
+  alarms.ts       Part 13 — pure alarm derivation + fire/dismiss/schedule decisions
+  notifications.ts Part 13 — bell items derived from the same store snapshot
+  journal.ts      Part 13 — capped seen/fired key journal (localStorage)
   blob.ts         byte access with a FileReader fallback
   storage/
     adapter.ts            RecordStore + AttachmentStore interfaces   ← the seam
@@ -106,8 +116,10 @@ CRUD, undo-delete, archive, bulk edits, concurrent writes, corrupt-data recovery
 byte-exact file round-trip, the attachment cascade (files survive archive and
 undo-delete, and go with the record on permanent delete), and a backup round-trip:
 export, empty the store, re-import, and assert the records and the attachment bytes
-come back identical with a second import adding nothing. The home page shows the results; each check uses its own
-isolated key, so running it never touches your data.
+come back identical with a second import adding nothing. This is a development-only
+harness (`npm test` runs it under jsdom); its results panel was removed from the app
+UI, so the home page no longer shows any test log. Each check uses its own isolated
+key, so running it never touches your data.
 
 ## Stack
 
@@ -117,7 +129,7 @@ state, and it lives behind the storage adapter.
 
 ## Status
 
-Parts 1–11 of 12 are in. The data model, storage seam and verification harness (Part 1);
+Parts 1–13 of 13 are in. The data model, storage seam and verification harness (Part 1);
 the add/edit list view (Part 2); the List/Board toggle with the seven-column Kanban board
 (Part 3); search/filter/sort over both views (Part 4); PDF/DOC/DOCX attachments keyed by
 application id with a per-file 5 MB limit (Part 5); clickable job links, notes/research
@@ -127,9 +139,11 @@ Monday-based weekly goal (Part 8); **archive, restore & permanent delete** (Part
 the list's Delete is now Archive, an Archived tab offers Restore and "Delete permanently"
 (which cascades the attachments via `getStorage().purge`), and an "N archived" count sits
 beside the filters; checkbox multi-select with bulk status/tag/archive and bulk permanent
-delete (Part 10); and **backup export/import** (Part 11) — the header's Data menu writes a
+delete (Part 10); **backup export/import** (Part 11) — the header's Data menu writes a
 JSON backup with attachments as base64 (or a CSV of the structured fields) and reads a
-previous backup back in, merging rather than wiping. GitHub Pages deploy + PWA
-installability is in. The spec is
+previous backup back in, merging rather than wiping; the Part 12 visual pass (theme,
+cards on mobile, toasts); and **notifications & alarms** (Part 13) — the header bell
+with derived follow-up/interview reminders and the in-app alarm engine with optional
+OS pop-ups (see above). GitHub Pages deploy + PWA installability is in. The spec is
 [`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
 progress and locked decisions are in [`PLAN.md`](PLAN.md).

@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_THEME, DEFAULT_WEEKLY_GOAL, LocalSettingsStore } from './localSettingsStore';
+import {
+  DEFAULT_ALARM_TIME,
+  DEFAULT_INTERVIEW_LEAD_DAYS,
+  DEFAULT_THEME,
+  DEFAULT_WEEKLY_GOAL,
+  LocalSettingsStore,
+} from './localSettingsStore';
 
 /**
- * The settings document is the persistence seam for both the weekly goal and
- * the light/dark theme. These tests keep that shape honest without touching
- * the real `jat.settings.v1` document.
+ * The settings document is the persistence seam for the weekly goal, the
+ * light/dark theme and Part 13's notification/alarm preferences. These tests
+ * keep that shape honest without touching the real `jat.settings.v1` document.
  */
 describe('LocalSettingsStore theme aware settings', () => {
   beforeEach(() => {
@@ -19,6 +25,18 @@ describe('LocalSettingsStore theme aware settings', () => {
     expect(settings.weeklyGoal).toBe(DEFAULT_WEEKLY_GOAL);
   });
 
+  it('defaults the Part 13 alarm fields when no settings document exists', async () => {
+    const store = new LocalSettingsStore('jat.settings.test.alarm-defaults');
+    const settings = await store.get();
+    expect(settings.notificationsEnabled).toBe(true);
+    expect(settings.alarmsEnabled).toBe(true);
+    expect(settings.alarmTime).toBe(DEFAULT_ALARM_TIME);
+    expect(settings.interviewLeadDays).toBe(DEFAULT_INTERVIEW_LEAD_DAYS);
+    expect(settings.followUpAlarms).toBe(true);
+    expect(settings.interviewAlarms).toBe(true);
+    expect(settings.browserAlerts).toBe(false);
+  });
+
   it('loads a legacy document that has no theme field safely', async () => {
     const key = 'jat.settings.test.legacy';
     globalThis.localStorage.setItem(key, JSON.stringify({ weeklyGoal: 9 }));
@@ -26,6 +44,11 @@ describe('LocalSettingsStore theme aware settings', () => {
     const settings = await store.get();
     expect(settings.theme).toBe('dark');
     expect(settings.weeklyGoal).toBe(9);
+    // Missing alarm fields resolve to defaults rather than undefined.
+    expect(settings.alarmTime).toBe('09:00');
+    expect(settings.interviewLeadDays).toBe(0);
+    expect(settings.alarmsEnabled).toBe(true);
+    expect(settings.browserAlerts).toBe(false);
   });
 
   it('persists theme without resetting weeklyGoal', async () => {
@@ -41,11 +64,38 @@ describe('LocalSettingsStore theme aware settings', () => {
     expect(withGoal.weeklyGoal).toBe(8);
   });
 
+  it('persists alarm preferences without resetting goal or theme', async () => {
+    const store = new LocalSettingsStore('jat.settings.test.alarms');
+    await store.set({ alarmTime: '07:30', interviewLeadDays: 2, followUpAlarms: false, browserAlerts: true });
+    const settings = await store.get();
+    expect(settings.alarmTime).toBe('07:30');
+    expect(settings.interviewLeadDays).toBe(2);
+    expect(settings.followUpAlarms).toBe(false);
+    expect(settings.browserAlerts).toBe(true);
+    expect(settings.theme).toBe('dark');
+    expect(settings.weeklyGoal).toBe(DEFAULT_WEEKLY_GOAL);
+  });
+
   it('normalises an unknown theme and an out-of-range goal', async () => {
     const store = new LocalSettingsStore('jat.settings.test.normalise');
     await store.set({ theme: 'sepia' as unknown as 'dark', weeklyGoal: 500 });
     const settings = await store.get();
     expect(settings.theme).toBe('dark');
     expect(settings.weeklyGoal).toBe(99);
+  });
+
+  it('normalises a bad alarm time, lead days and non-boolean switches', async () => {
+    const store = new LocalSettingsStore('jat.settings.test.normalise-alarms');
+    await store.set({
+      alarmTime: '25:99',
+      interviewLeadDays: 900,
+      followUpAlarms: 'yes' as unknown as boolean,
+      alarmsEnabled: 1 as unknown as boolean,
+    });
+    const settings = await store.get();
+    expect(settings.alarmTime).toBe('09:00');
+    expect(settings.interviewLeadDays).toBe(14);
+    expect(settings.followUpAlarms).toBe(true);
+    expect(settings.alarmsEnabled).toBe(true);
   });
 });

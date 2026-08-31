@@ -5,9 +5,10 @@ import { ArchivedList } from './components/ArchivedList';
 import { DataMenu } from './components/DataMenu';
 import { FilterBar } from './components/FilterBar';
 import { KanbanBoard } from './components/KanbanBoard';
-import { SelfTestPanel } from './components/SelfTestPanel';
+import { NotificationCenter } from './components/NotificationCenter';
 import { ToastHost } from './components/ToastHost';
 import { UpcomingDashboard } from './components/UpcomingDashboard';
+import { ALARM_JOURNAL_KEY, ALARM_MIN_POLL_MS, alarmCheck, computeAlarmEvents, type AlarmEvent } from './lib/alarms';
 import { archivedRows, countArchived } from './lib/archive';
 import { saveStagedAttachments } from './lib/attachments';
 import {
@@ -18,9 +19,10 @@ import {
   rowsToTag,
 } from './lib/bulk';
 import { draftToInput, type ApplicationFormDraft } from './lib/form';
+import { KeyJournal } from './lib/journal';
 import { applyQuery, DEFAULT_FILTERS, filterToQuery, type FilterState } from './lib/query';
 import { getStorage } from './lib/storage';
-import type { ThemeMode } from './lib/storage/adapter';
+import type { TrackerSettings } from './lib/storage/adapter';
 import { pushToast } from './lib/toast';
 import type { ApplicationStatus, JobApplication } from './lib/types';
 
@@ -48,6 +50,11 @@ type ViewMode = 'list' | 'board' | 'upcoming' | 'archived';
  * merges — never wipes — through the same `records.create` / `attachments.add`
  * seams the add form uses. Export reads the unfiltered `records.all()` snapshot,
  * so the Archived tab and the undo window are in the backup too.
+ *
+ * Part 13 adds notifications & alarms: the header bell (derived reminders with
+ * a seen/unread journal) and the in-app alarm engine (`lib/alarms.ts`) that
+ * fires follow-up and interview reminders at the chosen time while the app is
+ * open, with optional OS pop-ups. Everything stays local — see PLAN.md.
  */
 export default function App() {
   const storage = getStorage();
@@ -58,7 +65,11 @@ export default function App() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<JobApplication | null>(null);
   const [saving, setSaving] = useState(false);
-  const [theme, setTheme] = useState<ThemeMode>('dark');
+  // Part 13: the whole settings document (theme + weekly goal + notifications
+  // & alarms) lives in one state object; `toggleTheme` and the bell both write
+  // patches through `storage.settings.set` and adopt the normalised result.
+  const [settings, setSettings] = useState<TrackerSettings | null>(null);
+  const theme = settings?.theme ?? 'dark';
 
   const reload = useCallback(async () => {
     try {
@@ -76,17 +87,17 @@ export default function App() {
     void reload();
   }, [reload]);
 
-  // Part 12 visual pass: the theme lives in the settings seam, never localStorage
-  // directly. Legacy settings documents without `theme` resolve to dark.
+  // The settings document feeds the theme and the notification/alarm engine.
+  // Legacy documents without the newer fields resolve to their defaults.
   useEffect(() => {
     let cancelled = false;
     void storage.settings
       .get()
-      .then((settings) => {
-        if (!cancelled) setTheme(settings.theme);
+      .then((loaded) => {
+        if (!cancelled) setSettings(loaded);
       })
       .catch(() => {
-        if (!cancelled) setTheme('dark');
+        if (!cancelled) setSettings(null);
       });
     return () => {
       cancelled = true;
@@ -103,16 +114,62 @@ export default function App() {
   }, [theme]);
 
   async function toggleTheme() {
-    const next: ThemeMode = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setSettings((current) => (current ? { ...current, theme: next } : current));
     try {
-      await storage.settings.set({ theme: next });
+      const updated = await storage.settings.set({ theme: next });
+      setSettings(updated);
       pushToast(next === 'dark' ? 'Dark theme enabled.' : 'Light theme enabled.');
     } catch (err) {
-      setTheme(next === 'dark' ? 'light' : 'dark');
+      setSettings((current) => (current ? { ...current, theme: theme === 'dark' ? 'light' : 'dark' } : current));
       setLoadError(err instanceof Error ? err.message : String(err));
     }
   }
+
+  function updateSettings(patch: Partial<TrackerSettings>) {
+    void storage.settings
+      .set(patch)
+      .then((updated) => setSettings(updated))
+      .catch((err) => setLoadError(err instanceof Error ? err.message : String(err)));
+  }
+
+  // Part 13: the alarm engine. One setTimeout loop re-derives the event list
+  // every minute (or when the next event is closer), fires whatever is due
+  // within the catch-up window, marks handled keys in `jat.alarms.v1`, and
+  // optionally raises an OS pop-up. Returning to a hidden tab re-checks
+  // immediately so backgrounded alarms catch up the moment the tab is visible.
+  useEffect(() => {
+    if (rows === null || settings === null || !settings.alarmsEnabled) return;
+    const journal = new KeyJournal(ALARM_JOURNAL_KEY);
+    let timer: number | undefined;
+
+    const run = () => {
+      const now = new Date();
+      const events = computeAlarmEvents(rows, settings, now);
+      const outcome = alarmCheck(events, journal.keys(), now.getTime());
+      if (outcome.dismiss.length > 0) journal.mark(outcome.dismiss);
+      for (const event of outcome.fire) {
+        journal.mark([event.key]);
+        pushToast(event.message, 'info', 12_000);
+        showBrowserAlert(event, settings.browserAlerts);
+      }
+      const delay =
+        outcome.nextInMs === null
+          ? ALARM_MIN_POLL_MS
+          : Math.max(10_000, Math.min(outcome.nextInMs, ALARM_MIN_POLL_MS));
+      timer = window.setTimeout(run, delay);
+    };
+
+    run();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') run();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [rows, settings]);
 
   // Part 4: both views derive from the same store snapshot — the list shows
   // the filtered+sorted rows, the board dims the rows that did not match.
@@ -329,12 +386,15 @@ export default function App() {
           <div className="mr-auto min-w-0">
             <h1 className="truncate text-base font-semibold tracking-tight text-ink">Job Application Tracker</h1>
             <p className="hidden text-xs text-muted sm:block">
-              Part 12 of 12 — polished, responsive, and local-first
+              Follow-ups, interviews and alarms — all local, nothing leaves this browser
             </p>
           </div>
           <div className="hidden md:inline-flex">
             <DriverBadge driver={storage.driver} />
           </div>
+          {settings ? (
+            <NotificationCenter rows={rows ?? []} settings={settings} onPatch={updateSettings} onOpenRow={openEdit} />
+          ) : null}
           <DataMenu onImported={() => void reload()} />
           <button
             type="button"
@@ -442,15 +502,6 @@ export default function App() {
             )}
           </>
         )}
-
-        <details className="rounded-xl border border-hairline bg-surface shadow-sm">
-          <summary className="cursor-pointer px-5 py-3 text-xs text-muted hover:text-ink">
-            Foundation checks
-          </summary>
-          <div className="border-t border-hairline px-1 pb-1">
-            <SelfTestPanel />
-          </div>
-        </details>
       </main>
 
       <MobileBottomNav view={view} archivedCount={archivedCount} onNavigate={setView} />
@@ -465,6 +516,22 @@ export default function App() {
       <ToastHost />
     </div>
   );
+}
+
+/**
+ * Part 13: OS-level pop-up for a fired alarm, only when the user opted in AND
+ * the browser granted permission. Guarded so jsdom and browsers without the
+ * Notification API degrade to the in-app toast alone.
+ */
+function showBrowserAlert(event: AlarmEvent, enabled: boolean): void {
+  if (!enabled || typeof window === 'undefined' || !('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  try {
+    // `tag` dedupes per event key: the same reminder cannot stack pop-ups.
+    new Notification('Job Application Tracker', { body: event.message, tag: event.key });
+  } catch {
+    // Some platforms reject programmatic notifications; the toast already fired.
+  }
 }
 
 function DriverBadge({ driver }: { driver: 'local' | 'rest' }) {
