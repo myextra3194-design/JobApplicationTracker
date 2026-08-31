@@ -44,6 +44,7 @@ export function UpcomingDashboard({ rows, onOpen }: UpcomingDashboardProps) {
                   key={row.id}
                   row={row}
                   dateLabel="Follow-up"
+                  kind="follow-up"
                   date={row.followUpDate}
                   extra=""
                   tone={overdue ? 'overdue' : 'due'}
@@ -73,6 +74,7 @@ export function UpcomingDashboard({ rows, onOpen }: UpcomingDashboardProps) {
                 key={row.id}
                 row={row}
                 dateLabel="Interview"
+                kind="interview"
                 date={row.interviewDate}
                 extra={row.interviewStatus}
                 tone="interview"
@@ -91,6 +93,7 @@ export function UpcomingDashboard({ rows, onOpen }: UpcomingDashboardProps) {
 function DashboardItem({
   row,
   dateLabel,
+  kind,
   date,
   extra,
   tone,
@@ -98,6 +101,8 @@ function DashboardItem({
 }: {
   row: JobApplication;
   dateLabel: string;
+  /** Which date this is — keeps the .ics UID distinct per event kind. */
+  kind: 'follow-up' | 'interview';
   date: string | null;
   extra: string;
   tone: 'overdue' | 'due' | 'interview';
@@ -137,7 +142,10 @@ function DashboardItem({
                 companyName: row.companyName,
                 jobTitle: row.jobTitle,
                 date,
-                uid: `${row.id}-${date}`,
+                // The kind is part of the UID: a follow-up and an interview on
+                // the same day of the same application must not share one, or
+                // importing both into a calendar overwrites the first event.
+                uid: `${row.id}-${kind}-${date}`,
               })
             }
             className="shrink-0 rounded-lg border border-hairline bg-surface px-2 py-1 text-[11px] text-muted shadow-sm transition hover:bg-surface-raised hover:text-ink"

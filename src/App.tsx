@@ -143,6 +143,7 @@ export default function App() {
   }
 
   async function handleSave(draft: ApplicationFormDraft) {
+    if (saving) return;
     setSaving(true);
     try {
       // `draftToInput` deliberately excludes draft.files: a record never references
@@ -155,12 +156,32 @@ export default function App() {
       // keyed to. Saving them earlier would orphan blobs for a row that may never
       // be created (a validation failure or a closed dialog), and nothing would
       // ever cascade them away.
-      await saveStagedAttachments(saved.id, draft.files);
+      //
+      // A failure in here must NOT leave the add form open: the record already
+      // exists, so retrying the save would run `records.create` a second time and
+      // duplicate the row. Swallow it, close the form, and tell the user to
+      // re-attach from the edit form instead.
+      let attachmentError: string | null = null;
+      try {
+        await saveStagedAttachments(saved.id, draft.files);
+      } catch (err) {
+        attachmentError = err instanceof Error ? err.message : String(err);
+      }
       setFormOpen(false);
       setEditing(null);
       await reload();
-      pushToast(editing ? 'Application updated.' : 'Application saved.');
+      if (attachmentError) {
+        setLoadError(attachmentError);
+        pushToast(
+          'Application saved, but its attachments could not be stored — reopen this application to attach the files again.',
+          'error',
+        );
+      } else {
+        pushToast(editing ? 'Application updated.' : 'Application saved.');
+      }
     } catch (err) {
+      // The record itself was not written, so the form stays open with the
+      // draft intact and a retry is safe (it cannot duplicate anything).
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { runSelfTests, type CheckResult } from '../lib/selfTest';
 
 /**
@@ -10,16 +10,28 @@ export function SelfTestPanel() {
   const [results, setResults] = useState<CheckResult[] | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The harness outlives the panel: it is still awaiting when the app unmounts
+  // (a test teardown, or a navigation away). Setting state after that would hit
+  // a torn-down environment, so every setter is gated on this flag.
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   const run = useCallback(async () => {
     setRunning(true);
     setError(null);
     try {
-      setResults(await runSelfTests());
+      const next = await runSelfTests();
+      if (aliveRef.current) setResults(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (aliveRef.current) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setRunning(false);
+      if (aliveRef.current) setRunning(false);
     }
   }, []);
 

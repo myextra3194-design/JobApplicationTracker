@@ -35,6 +35,7 @@ export interface ApplicationFormDraft {
 export interface FormErrors {
   companyName?: string;
   jobTitle?: string;
+  matchScore?: string;
 }
 
 export function emptyFormDraft(): ApplicationFormDraft {
@@ -124,15 +125,52 @@ export function draftToInput(draft: ApplicationFormDraft): NewJobApplication {
   };
 }
 
+/**
+ * Match score is optional (null = not scored), but when it is filled in it must
+ * be a whole-ish number from 0 to 100. The normaliser would silently clamp
+ * "250" to 100 and "-5" to 0, so the form has to reject the value instead of
+ * quietly saving something different from what the user typed.
+ */
+function matchScoreError(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (trimmed === '') return undefined;
+  const score = Number(trimmed);
+  if (!Number.isFinite(score)) return 'Match score must be a number.';
+  if (score < 0 || score > 100) return 'Match score must be between 0 and 100.';
+  return undefined;
+}
+
 export function validateApplicationForm(draft: ApplicationFormDraft): FormErrors {
   const errors: FormErrors = {};
   if (!draft.companyName.trim()) errors.companyName = 'Company name is required.';
   if (!draft.jobTitle.trim()) errors.jobTitle = 'Job title is required.';
+  const score = matchScoreError(draft.matchScore);
+  if (score) errors.matchScore = score;
   return errors;
 }
 
 export function formHasErrors(errors: FormErrors): boolean {
-  return Boolean(errors.companyName || errors.jobTitle);
+  return Boolean(errors.companyName || errors.jobTitle || errors.matchScore);
+}
+
+/**
+ * The draft exactly as a submit must persist it. A tag the user typed into the
+ * tag input but never committed with Enter joins `tags` here instead of being
+ * silently dropped when the form saves — clicking "Add application" with the
+ * tag input still holding text must not lose that text.
+ *
+ * Referentially stable: a blank or duplicate pending tag returns the same draft
+ * object, so the component can skip a state write it does not need.
+ */
+export function commitPendingTag(
+  draft: ApplicationFormDraft,
+  pendingTag: string,
+): ApplicationFormDraft {
+  const tag = pendingTag.trim();
+  if (!tag) return draft;
+  const tags = addTag(draft.tags, tag);
+  // `addTag` returns a same-length copy when nothing was appended.
+  return tags.length === draft.tags.length ? draft : { ...draft, tags };
 }
 
 /**
