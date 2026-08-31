@@ -62,7 +62,7 @@ wins except for the locked decisions below.
 - Data is per browser install: phone ≠ desktop ≠ iPhone-home-screen-app. Sync is out
   of scope until Part 11's export/import; nobody should plan on cross-device
   continuity.
-- Repo state check (2026-08-31): this checkout contains **Parts 1–12**. Part 3 was
+- Repo state check (2026-08-31): this checkout contains **Parts 1–13**. Part 3 was
   rebuilt to spec after the old board branch was found never merged: List/Board
   toggle at the top of the page, the seven columns in pipeline order, non-archived
   only, and status change via a dropdown on the card (no drag-and-drop) — same
@@ -227,6 +227,44 @@ wins except for the locked decisions below.
   `docs/` were rebuilt in sync (the service worker needs no `CACHE_VERSION` bump:
   navigation is network-first and the hashed JS/CSS chunk names moved on their
   own, so the next load picks the new build up by itself).
+- Notifications & alarms pass (2026-08-31, **Part 13**): two changes landed
+  together.
+  ① *Unwanted log UI removed.* The "Foundation checks" collapsible at the bottom
+  of the app — which auto-ran the whole self-test harness on every load and
+  rendered its log inline — is gone from `App.tsx`, and `SelfTestPanel.tsx` is
+  deleted. The harness itself (`src/lib/selfTest.ts` + `selfTest.spec.ts`) stays
+  as the development-only acceptance suite (PLAN.md standing rule still targets
+  it), it just no longer has a UI. The header subtitle was replaced with
+  user-facing copy instead of the "Part 12 of 12" build label.
+  ② *Notifications & alarms.* `TrackerSettings` gained
+  `notificationsEnabled`, `alarmsEnabled`, `alarmTime` (`HH:MM`, default 09:00),
+  `interviewLeadDays` (0–14, default 0 = day-of only), `followUpAlarms`,
+  `interviewAlarms` and `browserAlerts` (opt-in OS pop-ups). Legacy settings
+  documents without these fields load safely with defaults; every field
+  normalises on write (`localSettingsStore`). The header bell
+  (`NotificationCenter`) shows derived reminders — overdue/due-today follow-ups
+  and interviews today/tomorrow/in-2-days (`lib/notifications.ts`, urgency
+  sorted, mirrors the Upcoming dashboard rules) — with an unread badge driven by
+  the seen-journal `jat.notifications.v1`. The bell panel also hosts the
+  reminder settings: master switches, remind-at time, interview lead days, and
+  the browser-permission opt-in with denied/unsupported states. The alarm engine
+  (`lib/alarms.ts`) is pure derivation + an `alarmCheck` decision function:
+  local wall-clock fire times (date-only fields are local calendar days), one
+  event per row/date/lead-day keyed through the fired-journal `jat.alarms.v1`
+  (fires at most once; more than 24h late is dismissed, never fired), a
+  `setTimeout` loop in `App.tsx` that re-polls each minute and on tab
+  visibility, in-app toasts on fire, and `Notification` pop-ups (tagged per
+  event so they cannot stack) when `browserAlerts` is on and granted. Alarms
+  only fire while the app is open — local-first means no server to wake a
+  closed tab; the panel says so in plain words. No field names, status values
+  or cascade paths changed; the storage seam grew no method (the journals are
+  small capped `KeyJournal` documents, `src/lib/journal.ts`, the same guarded
+  localStorage pattern as the settings store). The self-test settings check now
+  also proves the new defaults, round-trip and normalisation (standing rule);
+  new specs `journal.spec.ts` / `alarms.spec.ts` / `notifications.spec.ts` plus
+  the extended `settings.spec.ts` and a bell end-to-end flow in the smoke suite
+  bring the total to 21 files / 208 tests with no new dependency. `dist/` and
+  `docs/` rebuilt in sync.
 
 ---
 

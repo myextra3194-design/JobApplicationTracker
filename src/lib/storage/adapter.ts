@@ -81,9 +81,29 @@ export interface AttachmentStore {
 /** The two supported application themes. Persisted inside `jat.settings.v1`. */
 export type ThemeMode = 'dark' | 'light';
 
+/**
+ * Persisted inside `jat.settings.v1` alongside the weekly goal and theme.
+ * Part 13 (notifications & alarms): everything the in-app reminder engine
+ * needs to decide what to fire and when. All local, like the rest of the app —
+ * no push server, so alarms only fire while the app is open.
+ */
 export interface TrackerSettings {
   weeklyGoal: number;
   theme: ThemeMode;
+  /** Master switch for the notification bell + in-app reminder toasts. */
+  notificationsEnabled: boolean;
+  /** Master switch for the scheduled alarm engine. */
+  alarmsEnabled: boolean;
+  /** Local wall-clock time of day reminders fire at, `HH:MM` 24-hour. */
+  alarmTime: string;
+  /** Extra interview reminders N days before the interview (0 = day of only). */
+  interviewLeadDays: number;
+  /** Fire a reminder on the day a follow-up is due. */
+  followUpAlarms: boolean;
+  /** Fire a reminder on interview day (and the lead days above). */
+  interviewAlarms: boolean;
+  /** User opted in to OS-level pop-ups via the Notification API. */
+  browserAlerts: boolean;
 }
 
 export interface SettingsStore {

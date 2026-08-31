@@ -61,8 +61,11 @@ describe('App final-pass browser flow', () => {
     const rows = await storage.records.all();
     if (rows.length > 0) await storage.bulkPurge(rows.map((row) => row.id));
     // The theme toggle writes through the settings seam; reset it so a later
-    // smoke case always starts from the app's dark default.
+    // smoke case always starts from the app's dark default. Part 13's journals
+    // are per-row-key, but clearing them keeps the badge deterministic.
     globalThis.localStorage.removeItem('jat.settings.v1');
+    globalThis.localStorage.removeItem('jat.notifications.v1');
+    globalThis.localStorage.removeItem('jat.alarms.v1');
     await act(async () => {
       root?.unmount();
     });
@@ -345,6 +348,71 @@ describe('App final-pass browser flow', () => {
     });
     await waitUntil(async () => (await storage.settings.get()).theme === 'dark', 'the dark preference round-tripped');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+
+  it('shows reminders in the notification bell, opens a row from one, and marks the rest read', async () => {
+    const storage = getStorage();
+    await storage.records.replaceAll([]);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    await storage.records.create({
+      companyName: 'Bell Test Co',
+      jobTitle: 'QA Engineer',
+      status: 'Applied',
+      followUpDate: toPlainDate(new Date()),
+    });
+    await storage.records.create({
+      companyName: 'Bell Test Two',
+      jobTitle: 'Designer',
+      status: 'Interview',
+      interviewDate: toPlainDate(tomorrow),
+    });
+
+    await act(async () => {
+      root = createRoot(host);
+      root.render(createElement(App));
+      await tick();
+    });
+    await waitUntil(() => document.body.textContent?.includes('List View') === true, 'the app loaded');
+
+    // Both reminders are unread: the bell badge shows 2.
+    const bell = document.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]');
+    expect(bell).not.toBeNull();
+    await waitUntil(() => bell?.textContent?.includes('2') === true, 'the unread badge shows 2');
+    await act(async () => {
+      bell?.click();
+      await tick();
+    });
+    await waitUntil(
+      () => document.body.textContent?.includes('Follow-up due today') === true,
+      'the follow-up reminder is listed',
+    );
+    expect(document.body.textContent).toContain('Interview tomorrow');
+
+    // Clicking the follow-up item marks it read and opens that row's edit form.
+    const followUpItem = [...document.querySelectorAll('button')].find((element) =>
+      element.textContent?.includes('Follow-up due today'),
+    );
+    expect(followUpItem).not.toBeNull();
+    await act(async () => {
+      followUpItem?.click();
+      await tick();
+    });
+    await waitUntil(() => document.querySelector('[role="dialog"]') !== null, 'the edit form opened from the bell');
+
+    // Reopen the bell: one item remains unread, then Mark all read clears the badge.
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+      await tick();
+    });
+    await act(async () => {
+      bell?.click();
+      await tick();
+    });
+    await waitUntil(() => document.body.textContent?.includes('Mark all read') === true, 'the bell reopened');
+    await clickButton('Mark all read');
+    expect(bell?.textContent?.includes('1')).toBe(false);
+    expect(bell?.textContent?.trim()).toBe('🔔');
   });
 });
 

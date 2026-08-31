@@ -417,6 +417,13 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       // Legacy settings documents without a theme still load safely.
       const legacy = await settings.get();
       assert(legacy.theme === 'dark', `legacy settings must default to dark, got ${legacy.theme}`);
+      // Part 13 defaults: the alarm engine gets sane values from an empty document.
+      assert(legacy.alarmsEnabled === true, 'legacy settings must default alarmsEnabled to true');
+      assert(legacy.notificationsEnabled === true, 'legacy settings must default notificationsEnabled to true');
+      assert(legacy.alarmTime === '09:00', `legacy settings must default alarmTime to 09:00, got ${legacy.alarmTime}`);
+      assert(legacy.interviewLeadDays === 0, 'legacy settings must default interviewLeadDays to 0');
+      assert(legacy.followUpAlarms === true && legacy.interviewAlarms === true, 'reminder kinds must default on');
+      assert(legacy.browserAlerts === false, 'OS pop-ups must default off (permission is opt-in)');
       await settings.set({ weeklyGoal: 7 });
       let read = await settings.get();
       assert(read.weeklyGoal === 7, `expected weeklyGoal 7, got ${read.weeklyGoal}`);
@@ -425,6 +432,17 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       read = await settings.get();
       assert(read.weeklyGoal === 7, 'changing theme must not reset weeklyGoal');
       assert(read.theme === 'light', `expected theme light, got ${read.theme}`);
+      await settings.set({ alarmTime: '07:30', interviewLeadDays: 2, followUpAlarms: false, browserAlerts: true });
+      read = await settings.get();
+      assert(read.alarmTime === '07:30', `expected alarmTime 07:30, got ${read.alarmTime}`);
+      assert(read.interviewLeadDays === 2, `expected interviewLeadDays 2, got ${read.interviewLeadDays}`);
+      assert(read.followUpAlarms === false, 'followUpAlarms false must round-trip');
+      assert(read.browserAlerts === true, 'browserAlerts true must round-trip');
+      assert(read.weeklyGoal === 7 && read.theme === 'light', 'alarm settings must not reset goal or theme');
+      await settings.set({ alarmTime: '25:99', interviewLeadDays: 900 });
+      read = await settings.get();
+      assert(read.alarmTime === '09:00', 'an invalid alarmTime must normalise back to the default');
+      assert(read.interviewLeadDays === 14, 'interviewLeadDays must clamp to 14');
       assert(
         globalThis.localStorage.getItem(store.storageKey) === appsBefore,
         'settings write must not rewrite the applications document',
@@ -435,7 +453,7 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       );
       await settings.clear();
       assert(globalThis.localStorage.getItem(settingsKey) === null, 'isolated settings key was not cleaned up');
-      return 'weekly goal and theme round-trip on jat.settings.v1; applications document untouched';
+      return 'goal, theme and Part 13 alarm settings round-trip on jat.settings.v1; applications document untouched';
     }),
 
     runCheck('backup export/import round-trips records and files', async (store) => {
