@@ -11,6 +11,9 @@ const SETTINGS: AlarmSettingsLike = {
   interviewLeadDays: 1,
   followUpAlarms: true,
   interviewAlarms: true,
+  // 0 keeps these fixtures on the explicit-date-only rule; the automatic
+  // cadence has its own cases below.
+  followUpDays: 0,
 };
 
 describe('parseAlarmTime', () => {
@@ -133,5 +136,69 @@ describe('alarmCheck', () => {
     expect(outcome.fire).toEqual([]);
     expect(outcome.dismiss).toEqual(['follow-up:stale:2026-08-10', 'follow-up:due:2026-08-29']);
     expect(ALARM_CATCH_UP_MS).toBe(24 * 60 * 60 * 1000);
+  });
+});
+
+describe('computeAlarmEvents — automatic follow-up cadence', () => {
+  it('alarms 7 days after applying when the row has no follow-up of its own', () => {
+    const row = emptyJobApplication({
+      id: 'auto',
+      status: 'Applied',
+      applicationDate: '2026-08-22',
+      followUpDate: null,
+      companyName: 'Acme',
+      jobTitle: 'Staff Engineer',
+    });
+
+    // Not due yet on the day of applying.
+    expect(computeAlarmEvents([row], { ...SETTINGS, followUpDays: 7 }, new Date(2026, 7, 22, 10, 0))).toEqual([]);
+
+    const events = computeAlarmEvents([row], { ...SETTINGS, followUpDays: 7 }, TODAY);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      key: 'follow-up:auto:2026-08-29',
+      kind: 'follow-up',
+      date: '2026-08-29',
+      fireAt: new Date(2026, 7, 29, 9, 0, 0, 0).getTime(),
+    });
+    expect(events[0]?.message).toBe('Follow-up due today — Acme — Staff Engineer (7 days after applying)');
+  });
+
+  it('reports an overdue automatic follow-up with the day count', () => {
+    const row = emptyJobApplication({
+      id: 'auto-late',
+      status: 'Applied',
+      applicationDate: '2026-08-20',
+      followUpDate: null,
+      companyName: 'Acme',
+      jobTitle: 'Staff Engineer',
+    });
+    const events = computeAlarmEvents([row], { ...SETTINGS, followUpDays: 7 }, TODAY);
+    expect(events[0]?.message).toContain('overdue by 2 days');
+    expect(events[0]?.message).toContain('(7 days after applying)');
+  });
+
+  it('still prefers a typed follow-up date over the cadence', () => {
+    const row = emptyJobApplication({
+      id: 'typed',
+      status: 'Applied',
+      applicationDate: '2026-08-22',
+      followUpDate: '2026-08-29',
+      companyName: 'Acme',
+    });
+    const events = computeAlarmEvents([row], { ...SETTINGS, followUpDays: 7 }, TODAY);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.date).toBe('2026-08-29');
+    expect(events[0]?.message).not.toContain('days after applying');
+  });
+
+  it('derives nothing when the cadence is off', () => {
+    const row = emptyJobApplication({
+      id: 'off',
+      status: 'Applied',
+      applicationDate: '2026-08-22',
+      followUpDate: null,
+    });
+    expect(computeAlarmEvents([row], { ...SETTINGS, followUpDays: 0 }, TODAY)).toEqual([]);
   });
 });

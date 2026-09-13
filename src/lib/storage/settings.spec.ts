@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_ALARM_TIME,
+  DEFAULT_FOLLOW_UP_DAYS,
   DEFAULT_INTERVIEW_LEAD_DAYS,
   DEFAULT_THEME,
   DEFAULT_WEEKLY_GOAL,
@@ -32,6 +33,8 @@ describe('LocalSettingsStore theme aware settings', () => {
     expect(settings.alarmsEnabled).toBe(true);
     expect(settings.alarmTime).toBe(DEFAULT_ALARM_TIME);
     expect(settings.interviewLeadDays).toBe(DEFAULT_INTERVIEW_LEAD_DAYS);
+    expect(settings.followUpDays).toBe(DEFAULT_FOLLOW_UP_DAYS);
+    expect(DEFAULT_FOLLOW_UP_DAYS).toBe(7);
     expect(settings.followUpAlarms).toBe(true);
     expect(settings.interviewAlarms).toBe(true);
     expect(settings.browserAlerts).toBe(false);
@@ -47,6 +50,7 @@ describe('LocalSettingsStore theme aware settings', () => {
     // Missing alarm fields resolve to defaults rather than undefined.
     expect(settings.alarmTime).toBe('09:00');
     expect(settings.interviewLeadDays).toBe(0);
+    expect(settings.followUpDays).toBe(7);
     expect(settings.alarmsEnabled).toBe(true);
     expect(settings.browserAlerts).toBe(false);
   });
@@ -97,5 +101,35 @@ describe('LocalSettingsStore theme aware settings', () => {
     expect(settings.interviewLeadDays).toBe(14);
     expect(settings.followUpAlarms).toBe(true);
     expect(settings.alarmsEnabled).toBe(true);
+  });
+});
+
+describe('LocalSettingsStore follow-up cadence', () => {
+  beforeEach(() => {
+    globalThis.localStorage.clear();
+  });
+
+  it('round-trips a chosen cadence without touching the other fields', async () => {
+    const store = new LocalSettingsStore('jat.settings.test.followup');
+    const updated = await store.set({ followUpDays: 10 });
+    expect(updated.followUpDays).toBe(10);
+    expect(updated.alarmTime).toBe(DEFAULT_ALARM_TIME);
+    expect((await store.get()).followUpDays).toBe(10);
+  });
+
+  it('clamps nonsense and keeps 0 as "off"', async () => {
+    const store = new LocalSettingsStore('jat.settings.test.followup-clamp');
+    expect((await store.set({ followUpDays: -4 })).followUpDays).toBe(0);
+    expect((await store.set({ followUpDays: 500 })).followUpDays).toBe(60);
+    expect((await store.set({ followUpDays: 7.4 })).followUpDays).toBe(7);
+    expect((await store.set({ followUpDays: Number.NaN })).followUpDays).toBe(DEFAULT_FOLLOW_UP_DAYS);
+    expect((await store.set({ followUpDays: 0 })).followUpDays).toBe(0);
+  });
+
+  it('normalises a junk value in a stored document on read', async () => {
+    const key = 'jat.settings.test.followup-junk';
+    globalThis.localStorage.setItem(key, JSON.stringify({ followUpDays: 'weekly' }));
+    const store = new LocalSettingsStore(key);
+    expect((await store.get()).followUpDays).toBe(DEFAULT_FOLLOW_UP_DAYS);
   });
 });

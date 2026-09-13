@@ -78,6 +78,24 @@ with a label you type that becomes the download filename.
   in-app toasts (and pop-ups, if allowed) while the app is open — local-first
   means there is no server to wake a closed tab. Seen/fired state lives in
   capped `jat.notifications.v1` / `jat.alarms.v1` journals.
+- **Follow up 7 days after applying (Part 14).** Every live, in-progress row with
+  an application date is treated as due for a follow-up **7 days later** unless
+  you typed a follow-up date of your own — nothing has to be scheduled by hand
+  for the reminder to exist. The cadence is a setting in the bell panel
+  (*Follow up after applying*: off, 3, 5, 7, 10, 14, 21 or 30 days) and it drives
+  the bell, the Upcoming dashboard and the in-app alarm alike; derived dates are
+  labelled `auto · 7 days after applying` and are never written to the record.
+  Typing an application date in the add/edit form pre-fills the follow-up field
+  with that date (clear or change it and it stays changed).
+- **Calendar events carry the job (Part 14).** "Add to calendar" now writes the
+  job's own details into the `.ics` — location, source, application date, stage,
+  recruiter, contact, package, tags, notes and research as `DESCRIPTION`, the
+  location as `LOCATION`, the posting link as `URL` — and a **follow-up** event
+  is a timed entry at your reminder hour with a `VALARM` on it, so the calendar
+  app itself rings on the day. Interview events stay all-day markers (an
+  interview blocks a day; the calendar's own all-day notification covers it).
+  A follow-up entry is titled `Follow up: Company — Role` so it reads as
+  something to do, not just a label.
 - To wipe everything: DevTools → Application → clear site data.
 
 ## Architecture
@@ -87,6 +105,7 @@ src/lib/
   types.ts        JobApplication — the one data shape the whole app shares
   applications.ts getAllApplications / saveApplication / deleteApplication
   pipeline.ts     stage order, terminal stages, follow-up-due rule, week math
+  ics.ts          Part 7/14 — the .ics builder: job details, all-day or alarmed
   normalize.ts    every read/write passes through here; junk input cannot reach a view
   query.ts        filter/sort/aggregate as pure functions
   attachments.ts  Part 5 — size/type rules, label→filename, save/download/remove
@@ -129,7 +148,7 @@ state, and it lives behind the storage adapter.
 
 ## Status
 
-Parts 1–13 of 13 are in. The data model, storage seam and verification harness (Part 1);
+Parts 1–13 of 13 are in, plus a Part 14 follow-up pass. The data model, storage seam and verification harness (Part 1);
 the add/edit list view (Part 2); the List/Board toggle with the seven-column Kanban board
 (Part 3); search/filter/sort over both views (Part 4); PDF/DOC/DOCX attachments keyed by
 application id with a per-file 5 MB limit (Part 5); clickable job links, notes/research
@@ -144,6 +163,8 @@ JSON backup with attachments as base64 (or a CSV of the structured fields) and r
 previous backup back in, merging rather than wiping; the Part 12 visual pass (theme,
 cards on mobile, toasts); and **notifications & alarms** (Part 13) — the header bell
 with derived follow-up/interview reminders and the in-app alarm engine with optional
-OS pop-ups (see above). GitHub Pages deploy + PWA installability is in. The spec is
+OS pop-ups (see above). **Part 14** adds the automatic 7-day follow-up cadence
+and calendar exports that carry the job's details and alarm on the day (see
+above). GitHub Pages deploy + PWA installability is in. The spec is
 [`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
 progress and locked decisions are in [`PLAN.md`](PLAN.md).

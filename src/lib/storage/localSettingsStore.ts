@@ -13,6 +13,10 @@ export const DEFAULT_WEEKLY_GOAL = 5;
 export const DEFAULT_THEME: ThemeMode = 'dark';
 export const DEFAULT_ALARM_TIME = '09:00';
 export const DEFAULT_INTERVIEW_LEAD_DAYS = 0;
+/** Automatic follow-up cadence: N days after applying. 0 = off. */
+export const DEFAULT_FOLLOW_UP_DAYS = 7;
+/** Longest sensible cadence — a year out is not a follow-up. */
+export const MAX_FOLLOW_UP_DAYS = 60;
 
 const ALARM_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -24,6 +28,12 @@ export function clampWeeklyGoal(n: number): number {
 export function clampInterviewLeadDays(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_INTERVIEW_LEAD_DAYS;
   return Math.max(0, Math.min(14, Math.round(n)));
+}
+
+/** 0 (off) to 60 days; junk falls back to the 7-day default. */
+export function clampFollowUpDays(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_FOLLOW_UP_DAYS;
+  return Math.max(0, Math.min(MAX_FOLLOW_UP_DAYS, Math.round(n)));
 }
 
 export function normalizeAlarmTime(value: unknown): string {
@@ -46,6 +56,7 @@ const defaults = (): TrackerSettings => ({
   alarmTime: DEFAULT_ALARM_TIME,
   interviewLeadDays: DEFAULT_INTERVIEW_LEAD_DAYS,
   followUpAlarms: true,
+  followUpDays: DEFAULT_FOLLOW_UP_DAYS,
   interviewAlarms: true,
   browserAlerts: false,
 });
@@ -61,6 +72,7 @@ function normalizeDocument(candidate: Record<string, unknown>): TrackerSettings 
     alarmTime: normalizeAlarmTime(candidate.alarmTime),
     interviewLeadDays: clampInterviewLeadDays(Number(candidate.interviewLeadDays ?? base.interviewLeadDays)),
     followUpAlarms: normalizeBool(candidate.followUpAlarms, base.followUpAlarms),
+    followUpDays: clampFollowUpDays(Number(candidate.followUpDays ?? base.followUpDays)),
     interviewAlarms: normalizeBool(candidate.interviewAlarms, base.interviewAlarms),
     browserAlerts: normalizeBool(candidate.browserAlerts, base.browserAlerts),
   };
@@ -113,6 +125,7 @@ export class LocalSettingsStore implements SettingsStore {
       interviewLeadDays:
         patch.interviewLeadDays === undefined ? current.interviewLeadDays : patch.interviewLeadDays,
       followUpAlarms: patch.followUpAlarms === undefined ? current.followUpAlarms : patch.followUpAlarms,
+      followUpDays: patch.followUpDays === undefined ? current.followUpDays : patch.followUpDays,
       interviewAlarms: patch.interviewAlarms === undefined ? current.interviewAlarms : patch.interviewAlarms,
       browserAlerts: patch.browserAlerts === undefined ? current.browserAlerts : patch.browserAlerts,
     });

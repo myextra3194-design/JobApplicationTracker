@@ -13,7 +13,7 @@
  */
 
 import type { JobApplication } from './types';
-import { daysFromToday, isFollowUpDue, isLive } from './pipeline';
+import { daysFromToday, effectiveFollowUpDate, isAutoFollowUp, isFollowUpDueOn, isLive } from './pipeline';
 
 export const ALARM_JOURNAL_KEY = 'jat.alarms.v1';
 /** How late an alarm may fire and still count as "just missed" (24 hours). */
@@ -48,6 +48,8 @@ export interface AlarmSettingsLike {
   interviewLeadDays: number;
   followUpAlarms: boolean;
   interviewAlarms: boolean;
+  /** Automatic follow-up cadence (days after applying). 0 = off. */
+  followUpDays: number;
 }
 
 export function parseAlarmTime(time: string): { hours: number; minutes: number } | null {
@@ -83,8 +85,11 @@ function rowLabel(row: JobApplication): string {
 /**
  * Every alarm event the current records + settings imply, soonest first.
  * Derivation rules:
- *  - follow-ups: only while due (`isFollowUpDue` — live, in-progress, date set,
- *    today or earlier), on the follow-up date at `alarmTime`.
+ *  - follow-ups: only while due (`isFollowUpDueOn` — live, in-progress, date
+ *    today or earlier), on the follow-up date at `alarmTime`. The date in play
+ *    is `effectiveFollowUpDate`: the typed one, or `applicationDate +
+ *    settings.followUpDays` when the row has no follow-up of its own — that is
+ *    what makes "alarm 7 days after applying" work for rows nobody scheduled.
  *  - interviews: live rows with an interview date today-or-later, on interview
  *    day at `alarmTime` plus one per lead day before it (0 = day of only).
  */
@@ -100,23 +105,29 @@ export function computeAlarmEvents(
   for (const row of records) {
     if (!isLive(row)) continue;
 
-    if (settings.followUpAlarms && row.followUpDate && isFollowUpDue(row, now)) {
-      const fireAt = fireAtFor(row.followUpDate, settings.alarmTime);
-      if (fireAt !== null) {
-        const overdueBy = -daysFromToday(row.followUpDate, now);
-        events.push({
-          key: `follow-up:${row.id}:${row.followUpDate}`,
-          kind: 'follow-up',
-          rowId: row.id,
-          companyName: row.companyName,
-          jobTitle: row.jobTitle,
-          date: row.followUpDate,
-          fireAt,
-          message:
-            overdueBy > 0
-              ? `Follow-up overdue by ${overdueBy} day${overdueBy === 1 ? '' : 's'} — ${rowLabel(row)}`
-              : `Follow-up due today — ${rowLabel(row)}`,
-        });
+    if (settings.followUpAlarms) {
+      const followUpDate = effectiveFollowUpDate(row, settings.followUpDays);
+      if (followUpDate && isFollowUpDueOn(row, followUpDate, now)) {
+        const fireAt = fireAtFor(followUpDate, settings.alarmTime);
+        if (fireAt !== null) {
+          const overdueBy = -daysFromToday(followUpDate, now);
+          const auto = isAutoFollowUp(row, settings.followUpDays)
+            ? ` (${settings.followUpDays} days after applying)`
+            : '';
+          events.push({
+            key: `follow-up:${row.id}:${followUpDate}`,
+            kind: 'follow-up',
+            rowId: row.id,
+            companyName: row.companyName,
+            jobTitle: row.jobTitle,
+            date: followUpDate,
+            fireAt,
+            message:
+              overdueBy > 0
+                ? `Follow-up overdue by ${overdueBy} day${overdueBy === 1 ? '' : 's'} — ${rowLabel(row)}${auto}`
+                : `Follow-up due today — ${rowLabel(row)}${auto}`,
+          });
+        }
       }
     }
 

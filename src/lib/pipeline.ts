@@ -80,10 +80,56 @@ export function isInProgress(record: JobApplication): boolean {
 /**
  * Follow-up is due when a date is set, it is today or earlier, and the record
  * hasn't reached a terminal stage. Part 7 (reminders) consumes this.
+ *
+ * `followUpDays` (0 = off, the default) turns on the automatic cadence: a live,
+ * in-progress row with an application date but no follow-up date of its own is
+ * treated as having one N days after it applied. Callers that know the user's
+ * setting pass it; everyone else keeps the explicit-date-only rule.
  */
-export function isFollowUpDue(record: JobApplication, today: Date = new Date()): boolean {
-  if (!isInProgress(record) || !record.followUpDate) return false;
-  return daysFromToday(record.followUpDate, today) <= 0;
+export function isFollowUpDue(record: JobApplication, today: Date = new Date(), followUpDays = 0): boolean {
+  return isFollowUpDueOn(record, effectiveFollowUpDate(record, followUpDays), today);
+}
+
+/** The due-check against an already-resolved follow-up date (explicit or auto). */
+export function isFollowUpDueOn(
+  record: JobApplication,
+  followUpDate: string | null,
+  today: Date = new Date(),
+): boolean {
+  if (!isInProgress(record) || !followUpDate) return false;
+  return daysFromToday(followUpDate, today) <= 0;
+}
+
+/**
+ * The follow-up date that counts for reminders and the calendar export: the
+ * explicit `followUpDate` when the user set one, otherwise
+ * `applicationDate + followUpDays` for a live, in-progress row.
+ *
+ * `Saved` rows are out (nothing has been sent yet), terminal rows are out
+ * (nothing to chase), and `followUpDays <= 0` disables the cadence entirely.
+ * The derived date is never written to the record — it is recomputed here so a
+ * changed cadence applies to existing rows too.
+ */
+export function effectiveFollowUpDate(record: JobApplication, followUpDays = 0): string | null {
+  if (record.followUpDate) return record.followUpDate;
+  if (followUpDays <= 0 || !record.applicationDate) return null;
+  if (!isInProgress(record)) return null;
+  return addDays(record.applicationDate, followUpDays);
+}
+
+/** True when the follow-up date in play is the derived one, not a typed one. */
+export function isAutoFollowUp(record: JobApplication, followUpDays = 0): boolean {
+  return !record.followUpDate && effectiveFollowUpDate(record, followUpDays) !== null;
+}
+
+/**
+ * `YYYY-MM-DD` plus a whole number of days → `YYYY-MM-DD`, or null when either
+ * side is junk. Date-only UTC arithmetic: no time zone, no DST edge cases.
+ */
+export function addDays(isoDate: string, days: number): string | null {
+  const base = Date.parse(`${isoDate.trim()}T00:00:00Z`);
+  if (Number.isNaN(base) || !Number.isFinite(days)) return null;
+  return new Date(base + Math.round(days) * 86_400_000).toISOString().slice(0, 10);
 }
 
 /** Positive = in the future, negative = in the past. Date-only, no time zone drift. */

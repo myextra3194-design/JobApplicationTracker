@@ -120,3 +120,35 @@ describe('upcomingInterviews', () => {
     expect(upcomingInterviews([live, archived, deleted], TODAY).map((r) => r.id)).toEqual(['live']);
   });
 });
+
+describe('dueFollowUps — automatic cadence', () => {
+  it('includes rows nobody scheduled once the cadence lands, soonest first', () => {
+    const autoDue = emptyJobApplication({
+      id: 'auto-due',
+      status: 'Applied',
+      applicationDate: '2026-08-22', // +7 = 2026-08-29 (today)
+      followUpDate: null,
+    });
+    const autoOverdue = emptyJobApplication({
+      id: 'auto-overdue',
+      status: 'Applied',
+      applicationDate: '2026-08-20', // +7 = 2026-08-27
+      followUpDate: null,
+    });
+    const autoFuture = emptyJobApplication({
+      id: 'auto-future',
+      status: 'Applied',
+      applicationDate: '2026-08-28', // +7 = 2026-09-04
+      followUpDate: null,
+    });
+    const typed = emptyJobApplication({ id: 'typed', status: 'Applied', followUpDate: '2026-08-29' });
+
+    expect(dueFollowUps([autoFuture, autoDue, autoOverdue, typed], TODAY, 7).map((r) => r.id)).toEqual([
+      'auto-overdue',
+      'auto-due',
+      'typed',
+    ]);
+    // With the cadence off, only the typed date counts.
+    expect(dueFollowUps([autoFuture, autoDue, autoOverdue, typed], TODAY).map((r) => r.id)).toEqual(['typed']);
+  });
+});

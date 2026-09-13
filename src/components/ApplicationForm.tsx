@@ -23,8 +23,10 @@ import {
   type ApplicationFormDraft,
 } from '../lib/form';
 import type { AttachmentMeta } from '../lib/storage/adapter';
+import { DEFAULT_FOLLOW_UP_DAYS } from '../lib/storage/localSettingsStore';
+import { addDays } from '../lib/pipeline';
 import { TagChip } from './TagChip';
-import { downloadDateAsIcs } from '../lib/ics';
+import { downloadDateAsIcs, type IcsJobDetails } from '../lib/ics';
 import {
   FINAL_RESULT_SUGGESTIONS,
   INTERVIEW_STATUS_SUGGESTIONS,
@@ -43,6 +45,11 @@ interface ApplicationFormProps {
   saving: boolean;
   onClose: () => void;
   onSave: (draft: ApplicationFormDraft) => Promise<void>;
+  /** Part 14: follow-up cadence from settings — typing an application date
+   *  schedules a follow-up this many days later. 0 = off. */
+  followUpDays?: number;
+  /** Part 14: reminder time from settings — the exported follow-up alarms at it. */
+  alarmTime?: string;
 }
 
 export function ApplicationForm({
@@ -52,6 +59,8 @@ export function ApplicationForm({
   saving,
   onClose,
   onSave,
+  followUpDays = DEFAULT_FOLLOW_UP_DAYS,
+  alarmTime,
 }: ApplicationFormProps) {
   const titleId = useId();
   const interviewListId = useId();
@@ -120,6 +129,20 @@ export function ApplicationForm({
 
   function patch<K extends keyof ApplicationFormDraft>(key: K, value: ApplicationFormDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  /**
+   * Part 14: setting the application date also schedules the follow-up —
+   * `followUpDays` later, 7 by default — but only into an empty field. A
+   * follow-up the user typed, or deliberately cleared, is never overwritten.
+   */
+  function onApplicationDateChange(value: string) {
+    setDraft((current) => {
+      if (current.followUpDate.trim() || !value || followUpDays <= 0) {
+        return { ...current, applicationDate: value };
+      }
+      return { ...current, applicationDate: value, followUpDate: addDays(value, followUpDays) ?? '' };
+    });
   }
 
   function commitTag() {
@@ -299,7 +322,7 @@ export function ApplicationForm({
               <input
                 type="date"
                 value={draft.applicationDate}
-                onChange={(e) => patch('applicationDate', e.target.value)}
+                onChange={(e) => onApplicationDateChange(e.target.value)}
                 className={inputClass()}
               />
             </Field>
@@ -347,6 +370,13 @@ export function ApplicationForm({
               companyName={draft.companyName}
               jobTitle={draft.jobTitle}
               applicationId={initial?.id}
+              details={draft}
+              alarmAt={alarmTime}
+              hint={
+                followUpDays > 0
+                  ? `Set automatically ${followUpDays} days after the application date — change or clear it any time.`
+                  : undefined
+              }
             />
             <DateWithCalendar
               label="Interview date"
@@ -356,6 +386,7 @@ export function ApplicationForm({
               companyName={draft.companyName}
               jobTitle={draft.jobTitle}
               applicationId={initial?.id}
+              details={draft}
             />
             <Field label="Interview status">
               <input
@@ -606,6 +637,10 @@ export function ApplicationForm({
  * Date input plus an "Add to calendar" button that only appears when the date
  * is set. Not a `<label>` wrapping the button — clicking the download must not
  * also focus the date picker.
+ *
+ * The exported event carries the rest of the draft (location, recruiter,
+ * posting link, notes) so the calendar entry is actionable on its own, and a
+ * follow-up is exported as a timed event at `alarmAt` with an alarm on it.
  */
 function DateWithCalendar({
   label,
@@ -615,6 +650,9 @@ function DateWithCalendar({
   companyName,
   jobTitle,
   applicationId,
+  details,
+  alarmAt,
+  hint,
 }: {
   label: string;
   /** Which date this is — keeps the .ics UID distinct per event kind. */
@@ -624,6 +662,11 @@ function DateWithCalendar({
   companyName: string;
   jobTitle: string;
   applicationId?: string;
+  /** Job fields for the event's description/location/url. */
+  details?: IcsJobDetails | null;
+  /** Local wall-clock time for the alarm; omit for an all-day marker. */
+  alarmAt?: string;
+  hint?: string;
 }) {
   return (
     <div className="flex flex-col gap-1 text-xs text-muted">
@@ -638,6 +681,9 @@ function DateWithCalendar({
                 companyName,
                 jobTitle,
                 date: value,
+                kind,
+                details,
+                alarmAt,
                 // The kind is part of the UID on purpose: a follow-up and an
                 // interview on the SAME day of the SAME application must not
                 // share a UID, or a calendar import silently overwrites one
@@ -652,6 +698,7 @@ function DateWithCalendar({
           </button>
         ) : null}
       </div>
+      {hint ? <span className="text-[11px] text-faint">{hint}</span> : null}
     </div>
   );
 }

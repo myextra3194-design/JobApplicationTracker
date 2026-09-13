@@ -4,6 +4,7 @@ import { StatusChip } from './StatusChip';
 import { TagChip } from './TagChip';
 import { useRowSelection } from './useRowSelection';
 import { previewText } from '../lib/preview';
+import { effectiveFollowUpDate, isAutoFollowUp } from '../lib/pipeline';
 import type { ApplicationStatus, JobApplication } from '../lib/types';
 
 interface ApplicationListProps {
@@ -18,10 +19,28 @@ interface ApplicationListProps {
   onBulkStatus: (ids: readonly string[], status: ApplicationStatus) => Promise<boolean> | boolean;
   onBulkTag: (ids: readonly string[], tag: string) => Promise<boolean> | boolean;
   onBulkArchive: (ids: readonly string[]) => Promise<boolean> | boolean;
+  /** Part 14: the automatic follow-up cadence, so the list shows the date that
+   *  will actually fire. 0 (or omitted) shows only typed follow-up dates. */
+  followUpDays?: number;
 }
 
 function dash(value: string | null): string {
   return value ? value : '—';
+}
+
+/**
+ * The follow-up date that counts: the typed one, or the derived cadence date
+ * marked `auto` so a row nobody scheduled still shows when it will be chased.
+ */
+function FollowUpDate({ row, followUpDays }: { row: JobApplication; followUpDays: number }) {
+  const date = effectiveFollowUpDate(row, followUpDays);
+  if (!date) return <>{dash(row.followUpDate)}</>;
+  return (
+    <>
+      {date}
+      {isAutoFollowUp(row, followUpDays) ? <span className="ml-1 text-[10px] text-faint">auto</span> : null}
+    </>
+  );
 }
 
 export function ApplicationList({
@@ -33,6 +52,7 @@ export function ApplicationList({
   onBulkStatus,
   onBulkTag,
   onBulkArchive,
+  followUpDays = 0,
 }: ApplicationListProps) {
   const selection = useRowSelection(rows);
 
@@ -97,6 +117,7 @@ export function ApplicationList({
             onToggle={() => selection.toggle(row.id)}
             onRowClick={onRowClick}
             onArchive={onArchive}
+            followUpDays={followUpDays}
           />
         ))}
       </div>
@@ -162,7 +183,9 @@ export function ApplicationList({
                       <StatusChip status={row.status} />
                     </td>
                     <td className="px-3 py-2.5 font-mono text-xs text-muted">{dash(row.applicationDate)}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-muted">{dash(row.followUpDate)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-muted">
+                      <FollowUpDate row={row} followUpDays={followUpDays} />
+                    </td>
                     <td className="px-3 py-2.5 font-mono text-xs text-muted">{dash(row.interviewDate)}</td>
                     <td className="max-w-44 px-3 py-2.5 text-xs text-muted">
                       <span className="block truncate" title={row.notes || undefined}>
@@ -206,12 +229,14 @@ function ApplicationCard({
   onToggle,
   onRowClick,
   onArchive,
+  followUpDays,
 }: {
   row: JobApplication;
   checked: boolean;
   onToggle: () => void;
   onRowClick: (row: JobApplication) => void;
   onArchive: (row: JobApplication) => void;
+  followUpDays: number;
 }) {
   return (
     <article
@@ -243,7 +268,10 @@ function ApplicationCard({
           Applied <span className="font-mono text-muted">{dash(row.applicationDate)}</span>
         </p>
         <p className="text-faint">
-          Follow-up <span className="font-mono text-muted">{dash(row.followUpDate)}</span>
+          Follow-up{' '}
+          <span className="font-mono text-muted">
+            <FollowUpDate row={row} followUpDays={followUpDays} />
+          </span>
         </p>
         <p className="text-faint">
           Interview <span className="font-mono text-muted">{dash(row.interviewDate)}</span>

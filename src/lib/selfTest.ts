@@ -422,6 +422,7 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       assert(legacy.notificationsEnabled === true, 'legacy settings must default notificationsEnabled to true');
       assert(legacy.alarmTime === '09:00', `legacy settings must default alarmTime to 09:00, got ${legacy.alarmTime}`);
       assert(legacy.interviewLeadDays === 0, 'legacy settings must default interviewLeadDays to 0');
+      assert(legacy.followUpDays === 7, `legacy settings must default followUpDays to 7, got ${legacy.followUpDays}`);
       assert(legacy.followUpAlarms === true && legacy.interviewAlarms === true, 'reminder kinds must default on');
       assert(legacy.browserAlerts === false, 'OS pop-ups must default off (permission is opt-in)');
       await settings.set({ weeklyGoal: 7 });
@@ -439,10 +440,17 @@ export async function runSelfTests(): Promise<CheckResult[]> {
       assert(read.followUpAlarms === false, 'followUpAlarms false must round-trip');
       assert(read.browserAlerts === true, 'browserAlerts true must round-trip');
       assert(read.weeklyGoal === 7 && read.theme === 'light', 'alarm settings must not reset goal or theme');
-      await settings.set({ alarmTime: '25:99', interviewLeadDays: 900 });
+      await settings.set({ followUpDays: 14 });
+      read = await settings.get();
+      assert(read.followUpDays === 14, `expected followUpDays 14, got ${read.followUpDays}`);
+      assert(read.weeklyGoal === 7, 'changing the follow-up cadence must not reset weeklyGoal');
+      await settings.set({ followUpDays: 0 });
+      assert((await settings.get()).followUpDays === 0, 'followUpDays 0 (off) must round-trip, not fall back to 7');
+      await settings.set({ alarmTime: '25:99', interviewLeadDays: 900, followUpDays: 900 });
       read = await settings.get();
       assert(read.alarmTime === '09:00', 'an invalid alarmTime must normalise back to the default');
       assert(read.interviewLeadDays === 14, 'interviewLeadDays must clamp to 14');
+      assert(read.followUpDays === 60, 'followUpDays must clamp to 60');
       assert(
         globalThis.localStorage.getItem(store.storageKey) === appsBefore,
         'settings write must not rewrite the applications document',

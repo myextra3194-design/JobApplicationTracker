@@ -100,6 +100,12 @@ export interface TrackerSettings {
   interviewLeadDays: number;
   /** Fire a reminder on the day a follow-up is due. */
   followUpAlarms: boolean;
+  /**
+   * Automatic follow-up cadence: how many days after the application date a
+   * row with no follow-up date of its own is treated as due. 0 = off.
+   * Default 7 — "chase every application a week after sending it".
+   */
+  followUpDays: number;
   /** Fire a reminder on interview day (and the lead days above). */
   interviewAlarms: boolean;
   /** User opted in to OS-level pop-ups via the Notification API. */
