@@ -23,6 +23,7 @@ import { KeyJournal } from './lib/journal';
 import { applyQuery, DEFAULT_FILTERS, filterToQuery, type FilterState } from './lib/query';
 import { getStorage } from './lib/storage';
 import type { TrackerSettings } from './lib/storage/adapter';
+import { DEFAULT_FOLLOW_UP_DAYS } from './lib/storage/localSettingsStore';
 import { pushToast } from './lib/toast';
 import type { ApplicationStatus, JobApplication } from './lib/types';
 
@@ -479,6 +480,7 @@ export default function App() {
                 onBulkStatus={(ids, status) => handleBulkStatus(ids, status)}
                 onBulkTag={(ids, tag) => handleBulkTag(ids, tag)}
                 onBulkArchive={(ids) => handleBulkArchive(ids)}
+                followUpDays={settings?.followUpDays ?? 0}
               />
             ) : view === 'board' ? (
               <KanbanBoard
@@ -489,7 +491,12 @@ export default function App() {
                 onAdd={openAdd}
               />
             ) : view === 'upcoming' ? (
-              <UpcomingDashboard rows={liveRows} onOpen={openEdit} />
+              <UpcomingDashboard
+                rows={liveRows}
+                onOpen={openEdit}
+                followUpDays={settings?.followUpDays ?? 0}
+                alarmTime={settings?.alarmTime}
+              />
             ) : (
               <ArchivedList
                 rows={archived}
@@ -512,6 +519,8 @@ export default function App() {
         saving={saving}
         onClose={closeForm}
         onSave={handleSave}
+        followUpDays={settings?.followUpDays ?? DEFAULT_FOLLOW_UP_DAYS}
+        alarmTime={settings?.alarmTime}
       />
       <ToastHost />
     </div>

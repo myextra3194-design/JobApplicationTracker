@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildIcsEvent, compactIcsDate, eventTitle, icsFilename } from './ics';
+import {
+  buildIcsEvent,
+  compactIcsDate,
+  compactIcsTime,
+  eventDescription,
+  eventTitle,
+  followUpTitle,
+  icsFilename,
+} from './ics';
 
 describe('eventTitle', () => {
   it('joins company and job title with an em dash', () => {
@@ -84,5 +92,136 @@ describe('icsFilename', () => {
     expect(icsFilename('', '', '2026-08-29')).toBe('2026-08-29.ics');
     expect(icsFilename('  ', '  ', '')).toBe('event.ics');
     expect(icsFilename('Acme', 'Engineer', '2026-08-29').endsWith('.ics')).toBe(true);
+  });
+});
+
+describe('eventDescription', () => {
+  it('lists only the fields that are filled, one per line', () => {
+    const description = eventDescription({
+      jobLocation: 'Doha, Qatar',
+      jobPortal: 'LinkedIn',
+      applicationDate: '2026-09-06',
+      status: 'Applied',
+      recruiterName: 'Jane Doe',
+      recruiterContact: 'jane@acme.test',
+      salary: '6,500 QAR',
+      notes: 'Referred by Sam.',
+      tags: ['priority', 'remote'],
+    });
+    expect(description).toBe(
+      [
+        'Location: Doha, Qatar',
+        'Source: LinkedIn',
+        'Applied: 2026-09-06',
+        'Stage: Applied',
+        'Recruiter: Jane Doe',
+        'Contact: jane@acme.test',
+        'Package: 6,500 QAR',
+        'Tags: priority, remote',
+        'Notes: Referred by Sam.',
+      ].join('\n'),
+    );
+  });
+
+  it('returns null when there is nothing to say', () => {
+    expect(eventDescription(null)).toBeNull();
+    expect(eventDescription(undefined)).toBeNull();
+    expect(eventDescription({ jobLocation: '   ', notes: '', tags: [] })).toBeNull();
+  });
+
+  it('caps a long note instead of writing the whole record', () => {
+    const description = eventDescription({ notes: 'x'.repeat(900) })!;
+    expect(description.startsWith('Notes: ')).toBe(true);
+    expect(description.length).toBeLessThan(700);
+    expect(description.endsWith('…')).toBe(true);
+  });
+});
+
+describe('compactIcsTime', () => {
+  it('turns HH:MM into HHMMSS and rejects junk', () => {
+    expect(compactIcsTime('09:00')).toBe('090000');
+    expect(compactIcsTime('23:59')).toBe('235900');
+    expect(compactIcsTime('9am')).toBeNull();
+    expect(compactIcsTime('24:00')).toBeNull();
+  });
+});
+
+describe('buildIcsEvent with an alarm time', () => {
+  const ics = buildIcsEvent({
+    title: followUpTitle('Acme', 'Staff Engineer'),
+    date: '2026-09-05',
+    uid: 'app-123-follow-up-2026-09-05',
+    description: eventDescription({ jobLocation: 'Doha', notes: 'Ask about the panel loop.' }),
+    location: 'Doha',
+    url: 'https://acme.test/jobs/42',
+    alarmAt: '09:00',
+  });
+
+  it('titles a follow-up as an instruction', () => {
+    expect(followUpTitle('Acme', 'Staff Engineer')).toBe('Follow up: Acme — Staff Engineer');
+    expect(ics).toContain('SUMMARY:Follow up: Acme — Staff Engineer\r\n');
+  });
+
+  it('becomes a timed event at the alarm time, not an all-day one', () => {
+    expect(ics).toContain('DTSTART:20260905T090000\r\n');
+    expect(ics).toContain('DTEND:20260905T093000\r\n');
+    expect(ics).not.toContain('VALUE=DATE');
+    // Floating local time: no TZID and no trailing Z on the start.
+    expect(ics).not.toContain('TZID');
+    expect(ics).not.toMatch(/DTSTART:\d{8}T\d{6}Z/);
+  });
+
+  it('carries a VALARM that fires at the event', () => {
+    expect(ics).toContain('BEGIN:VALARM\r\n');
+    expect(ics).toContain('ACTION:DISPLAY\r\n');
+    expect(ics).toContain('TRIGGER:-PT0S\r\n');
+    expect(ics).toContain('END:VALARM\r\n');
+    // The alarm block sits inside the event.
+    expect(ics.indexOf('BEGIN:VALARM')).toBeGreaterThan(ics.indexOf('BEGIN:VEVENT'));
+    expect(ics.indexOf('END:VALARM')).toBeLessThan(ics.indexOf('END:VEVENT'));
+  });
+
+  it('puts the job details in DESCRIPTION, LOCATION and URL', () => {
+    expect(ics).toContain('LOCATION:Doha\r\n');
+    expect(ics).toContain('DESCRIPTION:Location: Doha\\nNotes: Ask about the panel loop.\r\n');
+    expect(ics).toContain('URL:https://acme.test/jobs/42\r\n');
+  });
+
+  it('keeps CRLF endings and stays one document', () => {
+    expect(ics.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
+    expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+    expect(ics.replace(/\r\n/g, '').includes('\n')).toBe(false);
+  });
+});
+
+describe('buildIcsEvent without an alarm time', () => {
+  it('stays an all-day marker with no VALARM', () => {
+    const ics = buildIcsEvent({
+      title: eventTitle('Acme', 'Staff Engineer'),
+      date: '2026-09-05',
+      description: eventDescription({ status: 'Interview' }),
+    });
+    expect(ics).toContain('DTSTART;VALUE=DATE:20260905\r\n');
+    expect(ics).toContain('DESCRIPTION:Stage: Interview\r\n');
+    expect(ics).not.toContain('BEGIN:VALARM');
+  });
+
+  it('falls back to an all-day event when the alarm time is junk', () => {
+    const ics = buildIcsEvent({ title: 'Acme — Engineer', date: '2026-09-05', alarmAt: 'nine' });
+    expect(ics).toContain('DTSTART;VALUE=DATE:20260905\r\n');
+    expect(ics).not.toContain('BEGIN:VALARM');
+  });
+
+  it('omits empty description, location and url properties', () => {
+    const ics = buildIcsEvent({
+      title: 'Acme — Engineer',
+      date: '2026-09-05',
+      description: null,
+      location: '   ',
+      url: '',
+    });
+    expect(ics).not.toContain('DESCRIPTION:');
+    expect(ics).not.toContain('LOCATION:');
+    expect(ics).not.toContain('URL:');
   });
 });

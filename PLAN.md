@@ -265,6 +265,45 @@ wins except for the locked decisions below.
   the extended `settings.spec.ts` and a bell end-to-end flow in the smoke suite
   bring the total to 21 files / 208 tests with no new dependency. `dist/` and
   `docs/` rebuilt in sync.
+- Follow-up cadence + calendar details (2026-09-13, **Part 14**): "chase every
+  application a week after sending it" became a rule of the app instead of
+  something the user has to remember to schedule.
+  ① *Automatic follow-up.* `TrackerSettings` gained `followUpDays` (0–60,
+  default **7**, 0 = off; junk normalises to the default like every other
+  field). `pipeline.ts` grew `addDays`, `effectiveFollowUpDate`,
+  `isAutoFollowUp` and `isFollowUpDueOn`: the date in play is the typed
+  `followUpDate`, or `applicationDate + followUpDays` for a **live,
+  in-progress** row (Saved and terminal stages get nothing). The derived date is
+  never persisted — it is recomputed, so changing the cadence re-times existing
+  rows. Every consumer takes it from that one place: the Upcoming dashboard
+  (`dueFollowUps`), the bell (`deriveNotifications`), the alarm engine
+  (`computeAlarmEvents`, message suffixed `(7 days after applying)`) and the
+  `.ics` export. `isFollowUpDue(record, today)` keeps its old
+  explicit-date-only meaning with `followUpDays` defaulting to 0, so no existing
+  caller changed behaviour by accident. The form pre-fills the follow-up field
+  when an application date is typed into an empty one, and says so under the
+  field; a date the user typed or cleared is never overwritten. The bell panel
+  hosts the cadence select next to the interview lead reminder.
+  ② *Calendar events carry the job.* `lib/ics.ts` emits `DESCRIPTION`
+  (location, source, applied, stage, recruiter, contact, package, tags, notes,
+  research — each capped at 600 chars, only when filled), `LOCATION` and `URL`,
+  and `buildIcsEvent` accepts an `alarmAt` `HH:MM` that turns the event into a
+  **floating-time** event at that hour (no `TZID`/`Z`, same reasoning as the
+  all-day form: a date-only field has no zone) with a `VALARM`/`ACTION:DISPLAY`
+  /`TRIGGER:-PT0S` on it. Follow-ups export timed + alarmed and are titled
+  `Follow up: Company — Role`; interviews stay all-day markers on purpose — an
+  interview blocks a day, and the calendar's own all-day notification covers it.
+  UIDs are unchanged, so re-importing an event still updates rather than
+  duplicates. No field names, status values, storage keys or cascade paths
+  changed, and the storage seam grew no method (the cadence rides the existing
+  settings document). The self-test settings check now also proves the
+  `followUpDays` default, round-trip, 0-as-off and clamp (standing rule); new
+  cases in `pipeline` / `ics` / `alarms` / `upcoming` / `notifications` /
+  `settings` specs plus a smoke flow that seeds a row applied 7 days ago and
+  follows it through dashboard → bell → alarmed `.ics` bring the total to 20
+  files / 238 tests with no new dependency. `dist/` and `docs/` rebuilt in sync
+  (no `CACHE_VERSION` bump: navigation is network-first and the hashed chunk
+  names moved on their own).
 
 ---
 

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { blobToArrayBuffer } from './lib/blob';
 import { readFileAsText } from './lib/backup';
-import { toPlainDate } from './lib/pipeline';
+import { addDays, toPlainDate } from './lib/pipeline';
 import { getStorage } from './lib/storage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -97,7 +97,13 @@ describe('App final-pass browser flow', () => {
     await keyDown(document.querySelector<HTMLInputElement>('input[aria-label="Add tag"]')!, 'Enter');
 
     const dates = [...document.querySelectorAll<HTMLInputElement>('input[type="date"]')];
-    await changeControl(dates[0]!, toPlainDate(new Date()));
+    const appliedOn = toPlainDate(new Date());
+    await changeControl(dates[0]!, appliedOn);
+    // Typing the application date schedules the follow-up 7 days later, into
+    // the still-empty follow-up field — that is what the calendar alarm hangs
+    // off when the user never picks a follow-up date of their own.
+    await waitUntil(() => dates[1]!.value === addDays(appliedOn, 7), 'the follow-up auto-filled');
+    expect(document.body.textContent).toContain('Set automatically 7 days after the application date');
     // Follow-up and interview deliberately share a date: their two "Add to
     // calendar" exports must carry distinct UIDs, or importing both into one
     // calendar silently overwrites the first event with the second.
@@ -123,6 +129,18 @@ describe('App final-pass browser flow', () => {
     expect(uidOf(followUpIcs)).toContain('follow-up');
     expect(uidOf(interviewIcs)).toContain('interview');
     expect(uidOf(followUpIcs)).not.toBe(uidOf(interviewIcs));
+    // The follow-up export is a timed event with an alarm on it, carrying the
+    // job's own details; the interview export stays an all-day marker.
+    expect(followUpIcs).toContain(`SUMMARY:Follow up: Acme Robotics — Staff Engineer\r\n`);
+    expect(followUpIcs).toContain('BEGIN:VALARM\r\n');
+    expect(followUpIcs).toContain('TRIGGER:-PT0S\r\n');
+    // The test types its own follow-up date (today) over the suggested one, so
+    // the export is timed at the reminder hour on THAT day.
+    expect(followUpIcs).toContain(`DTSTART:${appliedOn.replace(/-/g, '')}T090000\r\n`);
+    expect(followUpIcs).toContain(`DTEND:${appliedOn.replace(/-/g, '')}T093000\r\n`);
+    expect(followUpIcs).toContain(`DESCRIPTION:Applied: ${appliedOn}\\nStage: Saved\\nTags: priority`);
+    expect(interviewIcs).not.toContain('BEGIN:VALARM');
+    expect(interviewIcs).toContain('DTSTART;VALUE=DATE:');
 
     const file = new File([new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55])], 'resume.pdf', {
       type: 'application/pdf',
@@ -315,6 +333,101 @@ describe('App final-pass browser flow', () => {
       'Gimlet Media',
       'Northwind',
     ]);
+  });
+
+  it('follows up 7 days after applying — dashboard, bell, and an alarmed calendar export', async () => {
+    const storage = getStorage();
+    await storage.records.replaceAll([]);
+    const today = toPlainDate(new Date());
+    const appliedOn = addDays(today, -7)!;
+    // A row nobody gave a follow-up date: the cadence has to supply one.
+    await storage.records.create({
+      companyName: 'Blue Harbor',
+      jobTitle: 'Frontend Engineer',
+      jobLocation: 'Lisbon, Portugal',
+      jobPortal: 'LinkedIn',
+      applicationDate: appliedOn,
+      status: 'Applied',
+      recruiterName: 'Jane Doe',
+      recruiterContact: 'jane@blueharbor.test',
+      salary: 'EUR 52,000',
+      jobLink: 'https://blueharbor.test/jobs/7',
+      notes: 'Referred by Sam — ask about the panel loop.',
+    });
+
+    await act(async () => {
+      root = createRoot(host);
+      root.render(createElement(App));
+      await tick();
+    });
+    await waitUntil(() => document.body.textContent?.includes('List View') === true, 'the app loaded');
+
+    // The list shows the date that will actually fire, marked as derived.
+    const followUpLine = [...document.querySelectorAll('article p')].find((line) =>
+      line.textContent?.startsWith('Follow-up'),
+    );
+    expect(followUpLine?.textContent).toContain(today);
+    expect(followUpLine?.textContent).toContain('auto');
+
+    await clickButton('Upcoming');
+    await waitUntil(
+      () => document.body.textContent?.includes('auto · 7 days after applying') === true,
+      'the automatic follow-up showed on the dashboard',
+    );
+    expect(document.body.textContent).toContain(`Follow-up ${today}`);
+
+    // The exported event is the follow-up itself: timed at the reminder hour on
+    // the derived day, alarmed, and carrying the job's details.
+    const calendarButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (element) => element.textContent?.trim() === 'Add to calendar',
+    );
+    expect(calendarButton).toBeTruthy();
+    lastDownload = null;
+    await act(async () => {
+      calendarButton!.click();
+      await tick();
+    });
+    await waitUntil(() => lastDownload !== null, 'the calendar file downloaded');
+    const ics = await readFileAsText(lastDownload!);
+    expect(ics).toContain('SUMMARY:Follow up: Blue Harbor — Frontend Engineer\r\n');
+    expect(ics).toContain(`DTSTART:${today.replace(/-/g, '')}T090000\r\n`);
+    expect(ics).toContain('BEGIN:VALARM\r\n');
+    expect(ics).toContain('TRIGGER:-PT0S\r\n');
+    // Commas are escaped in TEXT values, per RFC 5545.
+    expect(ics).toContain('LOCATION:Lisbon\\, Portugal\r\n');
+    expect(ics).toContain('URL:https://blueharbor.test/jobs/7\r\n');
+    expect(ics).toContain('Source: LinkedIn');
+    expect(ics).toContain('Recruiter: Jane Doe');
+    expect(ics).toContain('Contact: jane@blueharbor.test');
+    expect(ics).toContain('Package: EUR 52\\,000');
+
+    // The bell lists the same follow-up, and says it came from the cadence.
+    await clickButton('List View');
+    const bell = document.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]')!;
+    await act(async () => {
+      bell.click();
+      await tick();
+    });
+    await waitUntil(
+      () => document.body.textContent?.includes('Follow-up due today — Blue Harbor — Frontend Engineer') === true,
+      'the bell listed the automatic follow-up',
+    );
+    expect(document.body.textContent).toContain('(7 days after applying)');
+
+    // The cadence is a setting: moving it to 14 days pushes this follow-up out
+    // of the bell again, and the choice persists.
+    const cadence = document.querySelector<HTMLSelectElement>('select#follow-up-days')!;
+    expect(cadence).toBeTruthy();
+    await changeControl(cadence, '14');
+    await waitUntil(async () => (await storage.settings.get()).followUpDays === 14, 'the cadence persisted');
+    // Scoped to the bell panel: the alarm engine's toast for the same follow-up
+    // is still on screen and would match a whole-document check.
+    await waitUntil(
+      () =>
+        document.querySelector('div[aria-label="Notifications and reminders"]')?.textContent?.includes('Follow-up due') ===
+        false,
+      'the longer cadence moved the follow-up out of the bell',
+    );
   });
 
   it('loads dark, toggles to light, persists the choice and shows the active empty state', async () => {

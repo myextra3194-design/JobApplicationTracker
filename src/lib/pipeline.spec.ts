@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { emptyJobApplication } from './normalize';
-import { daysFromToday, isFollowUpDue, isLive, isTerminal, toPlainDate, weekKeyOf } from './pipeline';
+import {
+  addDays,
+  daysFromToday,
+  effectiveFollowUpDate,
+  isAutoFollowUp,
+  isFollowUpDue,
+  isLive,
+  isTerminal,
+  toPlainDate,
+  weekKeyOf,
+} from './pipeline';
 import { isSameWeek } from './pipeline';
 
 /** Fixed local reference date: Sat 29 Aug 2026. */
@@ -76,5 +86,76 @@ describe('status rules', () => {
       deletedAt: '2026-08-21T00:00:00.000Z',
     });
     expect(isLive(deleted)).toBe(false);
+  });
+});
+
+describe('addDays', () => {
+  it('adds whole days across month and year boundaries', () => {
+    expect(addDays('2026-08-29', 7)).toBe('2026-09-05');
+    expect(addDays('2026-08-29', 3)).toBe('2026-09-01');
+    expect(addDays('2026-12-28', 7)).toBe('2027-01-04');
+    expect(addDays('2026-08-29', 0)).toBe('2026-08-29');
+  });
+
+  it('returns null for junk input rather than NaN', () => {
+    expect(addDays('tomorrow', 7)).toBeNull();
+    expect(addDays('', 7)).toBeNull();
+    expect(addDays('2026-08-29', Number.NaN)).toBeNull();
+  });
+});
+
+describe('automatic follow-up cadence', () => {
+  const applied = (patch: Parameters<typeof emptyJobApplication>[0]) => emptyJobApplication(patch);
+
+  it('derives a follow-up 7 days after the application date when none is set', () => {
+    const row = applied({ id: 'a', status: 'Applied', applicationDate: '2026-08-29', followUpDate: null });
+    expect(effectiveFollowUpDate(row, 7)).toBe('2026-09-05');
+    expect(isAutoFollowUp(row, 7)).toBe(true);
+  });
+
+  it('never overrides a follow-up date the user typed', () => {
+    const row = applied({
+      id: 'b',
+      status: 'Applied',
+      applicationDate: '2026-08-29',
+      followUpDate: '2026-09-02',
+    });
+    expect(effectiveFollowUpDate(row, 7)).toBe('2026-09-02');
+    expect(isAutoFollowUp(row, 7)).toBe(false);
+  });
+
+  it('stays off for 0 days, Saved rows, terminal rows and rows with no application date', () => {
+    const base = { applicationDate: '2026-08-29', followUpDate: null };
+    expect(effectiveFollowUpDate(applied({ id: 'c', status: 'Applied', ...base }), 0)).toBeNull();
+    expect(effectiveFollowUpDate(applied({ id: 'd', status: 'Saved', ...base }), 7)).toBeNull();
+    expect(effectiveFollowUpDate(applied({ id: 'e', status: 'Rejected', ...base }), 7)).toBeNull();
+    expect(effectiveFollowUpDate(applied({ id: 'f', status: 'Offer', ...base }), 7)).toBeNull();
+    expect(effectiveFollowUpDate(applied({ id: 'g', status: 'Applied', applicationDate: null }), 7)).toBeNull();
+  });
+
+  it('excludes archived and deleted rows', () => {
+    const archived = applied({
+      id: 'h',
+      status: 'Applied',
+      applicationDate: '2026-08-29',
+      isArchived: true,
+    });
+    const deleted = applied({
+      id: 'i',
+      status: 'Applied',
+      applicationDate: '2026-08-29',
+      deletedAt: '2026-08-30T10:00:00.000Z',
+    });
+    expect(effectiveFollowUpDate(archived, 7)).toBeNull();
+    expect(effectiveFollowUpDate(deleted, 7)).toBeNull();
+  });
+
+  it('makes the derived date drive the due rule', () => {
+    const row = applied({ id: 'j', status: 'Applied', applicationDate: '2026-08-22', followUpDate: null });
+    // Applied 22 Aug + 7 = 29 Aug, which is TODAY in this fixture.
+    expect(isFollowUpDue(row, TODAY, 7)).toBe(true);
+    // The same row is not due when the cadence is off, or set to 8 days out.
+    expect(isFollowUpDue(row, TODAY)).toBe(false);
+    expect(isFollowUpDue(row, TODAY, 8)).toBe(false);
   });
 });

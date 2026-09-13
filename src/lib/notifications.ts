@@ -10,7 +10,7 @@
  */
 
 import type { JobApplication } from './types';
-import { daysFromToday, isFollowUpDue, isLive } from './pipeline';
+import { daysFromToday, effectiveFollowUpDate, isAutoFollowUp, isFollowUpDueOn, isLive } from './pipeline';
 
 export const NOTIFICATIONS_JOURNAL_KEY = 'jat.notifications.v1';
 /** How many days ahead interview reminders surface in the bell. */
@@ -57,23 +57,30 @@ export function deriveNotifications(
   records: readonly JobApplication[],
   today: Date = new Date(),
   windowDays: number = INTERVIEW_NOTICE_WINDOW_DAYS,
+  followUpDays = 0,
 ): AppNotification[] {
   const items: AppNotification[] = [];
 
   for (const row of records) {
     if (!isLive(row)) continue;
 
-    if (row.followUpDate && isFollowUpDue(row, today)) {
-      const days = -daysFromToday(row.followUpDate, today);
+    // Same rule as the Upcoming dashboard: the typed follow-up date, or the
+    // automatic cadence (`applicationDate + followUpDays`) when there is none.
+    const followUpDate = effectiveFollowUpDate(row, followUpDays);
+    if (followUpDate && isFollowUpDueOn(row, followUpDate, today)) {
+      const days = -daysFromToday(followUpDate, today);
+      const auto = isAutoFollowUp(row, followUpDays) ? ` (${followUpDays} days after applying)` : '';
       items.push({
-        key: `follow-up:${row.id}:${row.followUpDate}`,
+        key: `follow-up:${row.id}:${followUpDate}`,
         kind: days > 0 ? 'followup-overdue' : 'followup-today',
         rowId: row.id,
         companyName: row.companyName,
         jobTitle: row.jobTitle,
-        date: row.followUpDate,
+        date: followUpDate,
         message:
-          days > 0 ? `Follow-up ${overdueLabel(days)} — ${titleLine(row)}` : `Follow-up due today — ${titleLine(row)}`,
+          days > 0
+            ? `Follow-up ${overdueLabel(days)} — ${titleLine(row)}${auto}`
+            : `Follow-up due today — ${titleLine(row)}${auto}`,
         urgency: URGENCY[days > 0 ? 'followup-overdue' : 'followup-today'],
       });
     }

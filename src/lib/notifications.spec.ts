@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyJobApplication } from './normalize';
-import { countUnread, deriveNotifications } from './notifications';
+import { countUnread, deriveNotifications, INTERVIEW_NOTICE_WINDOW_DAYS } from './notifications';
 
 /** Fixed local reference date: Sat 29 Aug 2026 — same fixture as pipeline.spec. */
 const TODAY = new Date(2026, 7, 29);
@@ -80,5 +80,42 @@ describe('countUnread', () => {
     expect(countUnread(items, new Set())).toBe(2);
     expect(countUnread(items, new Set([items[0]!.key]))).toBe(1);
     expect(countUnread(items, new Set(items.map((item) => item.key)))).toBe(0);
+  });
+});
+
+describe('deriveNotifications — automatic cadence', () => {
+  it('surfaces a follow-up nobody scheduled and says where it came from', () => {
+    const row = emptyJobApplication({
+      id: 'auto',
+      status: 'Applied',
+      applicationDate: '2026-08-22',
+      followUpDate: null,
+      companyName: 'Acme',
+      jobTitle: 'Staff Engineer',
+    });
+
+    // Cadence off: nothing to say.
+    expect(deriveNotifications([row], TODAY)).toEqual([]);
+
+    const items = deriveNotifications([row], TODAY, INTERVIEW_NOTICE_WINDOW_DAYS, 7);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      key: 'follow-up:auto:2026-08-29',
+      kind: 'followup-today',
+      date: '2026-08-29',
+    });
+    expect(items[0]?.message).toBe('Follow-up due today — Acme — Staff Engineer (7 days after applying)');
+  });
+
+  it('keeps the typed follow-up wording when the user set the date', () => {
+    const row = emptyJobApplication({
+      id: 'typed',
+      status: 'Applied',
+      applicationDate: '2026-08-22',
+      followUpDate: '2026-08-29',
+      companyName: 'Acme',
+    });
+    const items = deriveNotifications([row], TODAY, INTERVIEW_NOTICE_WINDOW_DAYS, 7);
+    expect(items[0]?.message).toBe('Follow-up due today — Acme');
   });
 });

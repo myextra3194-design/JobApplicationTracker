@@ -4,10 +4,14 @@ import { KeyJournal } from '../lib/journal';
 import {
   countUnread,
   deriveNotifications,
+  INTERVIEW_NOTICE_WINDOW_DAYS,
   NOTIFICATIONS_JOURNAL_KEY,
   type AppNotification,
 } from '../lib/notifications';
 import type { JobApplication } from '../lib/types';
+
+/** Cadence choices for the automatic follow-up; 0 turns it off. */
+const FOLLOW_UP_DAY_OPTIONS = [0, 3, 5, 7, 10, 14, 21, 30];
 
 interface NotificationCenterProps {
   rows: JobApplication[];
@@ -47,7 +51,9 @@ export function NotificationCenter({ rows, settings, onPatch, onOpenRow }: Notif
 
   // `seenVersion` bumps after every mark, so the memo re-reads the journal and
   // the badge drops immediately. Rows are small; derivation is cheap.
-  const items = useMemo(() => deriveNotifications(rows), [rows]);
+  // The bell follows the same follow-up rule as the Upcoming dashboard, so a
+  // row nobody scheduled still shows up on the automatic cadence.
+  const items = useMemo(() => deriveNotifications(rows, new Date(), INTERVIEW_NOTICE_WINDOW_DAYS, settings.followUpDays), [rows, settings.followUpDays]);
   const seen = useMemo(() => new KeyJournal(NOTIFICATIONS_JOURNAL_KEY).keys(), [rows, seenVersion]);
   const unread = countUnread(items, seen);
 
@@ -223,6 +229,26 @@ export function NotificationCenter({ rows, settings, onPatch, onOpenRow }: Notif
                   checked={settings.interviewAlarms}
                   onChange={(next) => onPatch({ interviewAlarms: next })}
                 />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <label htmlFor="follow-up-days" className="text-xs text-muted">
+                      Follow up after applying
+                    </label>
+                    <p className="text-[11px] text-faint">When the row has no follow-up date of its own</p>
+                  </div>
+                  <select
+                    id="follow-up-days"
+                    value={String(settings.followUpDays)}
+                    onChange={(event) => onPatch({ followUpDays: Number(event.target.value) })}
+                    className="rounded-lg border border-hairline bg-surface px-2 py-1 text-xs text-ink outline-none focus:border-accent/60"
+                  >
+                    {FOLLOW_UP_DAY_OPTIONS.map((days) => (
+                      <option key={days} value={days}>
+                        {days === 0 ? 'Off' : `${days} day${days === 1 ? '' : 's'}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="flex items-center justify-between gap-3">
                   <label htmlFor="alarm-time" className="min-w-0 flex-1 text-xs text-muted">
                     Remind at

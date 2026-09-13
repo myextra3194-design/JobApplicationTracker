@@ -1,5 +1,5 @@
 import type { JobApplication } from './types';
-import { daysFromToday, isFollowUpDue, isLive } from './pipeline';
+import { daysFromToday, effectiveFollowUpDate, isFollowUpDueOn, isLive } from './pipeline';
 
 /**
  * Part 7: the Upcoming dashboard's two lists, derived from the same store
@@ -10,18 +10,25 @@ import { daysFromToday, isFollowUpDue, isLive } from './pipeline';
  */
 
 /**
- * Follow-ups due: wraps `isFollowUpDue` rather than reimplementing it.
- * That rule is: a date is set, it is today or earlier, status is in-progress
- * (not Rejected/Withdrawn/Offer — and not Saved), and the row is live.
- * Sorted soonest first (earliest `followUpDate` first).
+ * Follow-ups due: wraps `isFollowUpDueOn` rather than reimplementing it.
+ * That rule is: a date is in play, it is today or earlier, status is
+ * in-progress (not Rejected/Withdrawn/Offer — and not Saved), and the row is
+ * live. Sorted soonest first (earliest follow-up date first).
+ *
+ * The date in play is `effectiveFollowUpDate`: the typed follow-up, or
+ * `applicationDate + followUpDays` for a row nobody scheduled one for. Pass the
+ * user's cadence (0 = explicit dates only).
  */
 export function dueFollowUps(
   records: readonly JobApplication[],
   today: Date = new Date(),
+  followUpDays = 0,
 ): JobApplication[] {
   return records
-    .filter((record) => isFollowUpDue(record, today))
-    .sort((a, b) => (a.followUpDate ?? '').localeCompare(b.followUpDate ?? ''));
+    .filter((record) => isFollowUpDueOn(record, effectiveFollowUpDate(record, followUpDays), today))
+    .sort((a, b) =>
+      (effectiveFollowUpDate(a, followUpDays) ?? '').localeCompare(effectiveFollowUpDate(b, followUpDays) ?? ''),
+    );
 }
 
 /**
