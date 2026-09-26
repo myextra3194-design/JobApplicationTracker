@@ -23,6 +23,7 @@ import {
   type ApplicationFormDraft,
 } from '../lib/form';
 import type { AttachmentMeta } from '../lib/storage/adapter';
+import { EmailDraftPanel } from './EmailDraftPanel';
 import { TagChip } from './TagChip';
 import { downloadDateAsIcs } from '../lib/ics';
 import {
@@ -578,6 +579,14 @@ export function ApplicationForm({
               </span>
             </div>
           </section>
+
+          {/* Part 14: the outreach email, filled from the fields above — the
+              record already holds the company, role, recruiter, link and dates,
+              so the draft is written from what was typed rather than from a
+              blank template. It reads the unsaved form draft too, so an email
+              can be copied before the row exists. Copy and `mailto:` only:
+              nothing is sent, and nothing here is persisted. */}
+          <EmailDraftPanel source={draft} />
 
           <div className="flex items-center justify-end gap-2 border-t border-hairline pt-4">
             <button

@@ -265,6 +265,41 @@ wins except for the locked decisions below.
   the extended `settings.spec.ts` and a bell end-to-end flow in the smoke suite
   bring the total to 21 files / 208 tests with no new dependency. `dist/` and
   `docs/` rebuilt in sync.
+- Email drafts (2026-09-26, **Part 14** — an addition, not one of the spec's 13):
+  the record already holds everything an outreach email needs, so the add/edit
+  form now ends with an **Email draft** panel that writes one from it.
+  `src/lib/emailDraft.ts` is pure and follows the `ics.ts` split exactly: four
+  templates (`application`, `follow-up`, `interview-thanks`, `referral`) as
+  builders over a structural `EmailSource` — which both `JobApplication` and
+  `ApplicationFormDraft` satisfy with no translation, so an email can be drafted
+  from a form that has not been saved yet — plus `suggestTemplate` (status
+  driven, with a completed or already-past interview flipping it to the
+  thank-you, and a *future* interview date never doing so), `extractEmailAddress`
+  (the contact field is free-form by contract, so the address is found in it, not
+  assumed to be all of it), `humanDate`, `researchHook` (first sentence of the
+  research notes as the "why this company" line; split on punctuation rather than
+  a lookbehind, which is a parse-time SyntaxError on older Safari and this app
+  installs as a PWA on phones), `mailtoHref` (hand-encoded: `URLSearchParams`
+  turns spaces into `+`, which several clients show literally) and one thin DOM
+  helper, `copyText`, with the legacy textarea + `execCommand` path behind the
+  async clipboard. A field the record does not have becomes a `[bracketed
+  placeholder]`, never a silent gap, and `placeholderSummary` counts them in the
+  UI. **Nothing is persisted and the storage seam grew no method**: a draft is
+  not a record, so the signature name is typed in the panel rather than becoming
+  a `TrackerSettings` field (which would have meant touching the adapter,
+  `localSettingsStore`, the self-test and the settings UI for one string). The
+  referral template deliberately ignores `recruiterName`/`recruiterContact` —
+  it goes to the user's own contact, and mailing a recruiter "would you refer
+  me?" is a mistake worth refusing. Editing is per-field derived state in
+  `EmailDraftPanel.tsx` (no effect, so no stale-frame sync bug): an untouched
+  field keeps re-deriving from the record, a typed one stays the user's until
+  **Reset text**, and picking a template clears the edits. New spec
+  `emailDraft.spec.ts` (28 cases) plus one browser-path flow in the smoke suite
+  that opens a saved row, asserts the suggested template and the filled
+  recipient/subject, proves both halves of the editing model, copies through a
+  clipboard stub and asserts the unsaved rename never reached storage: 21 files /
+  237 tests, no new dependency. `dist/` and `docs/` rebuilt in sync (no
+  `CACHE_VERSION` bump needed: hashed chunk names moved on their own).
 
 ---
 

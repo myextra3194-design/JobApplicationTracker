@@ -414,6 +414,111 @@ describe('App final-pass browser flow', () => {
     expect(bell?.textContent?.includes('1')).toBe(false);
     expect(bell?.textContent?.trim()).toBe('🔔');
   });
+
+  it('drafts an email from the record, keeps hand edits, copies it and stores nothing', async () => {
+    const storage = getStorage();
+    await storage.records.replaceAll([]);
+    await storage.records.create({
+      companyName: 'Cedar Labs',
+      jobTitle: 'Senior Backend Engineer',
+      jobLocation: 'Doha',
+      jobPortal: 'LinkedIn',
+      jobLink: 'https://cedar.example/jobs/7',
+      recruiterName: 'Ms Nadia Ali',
+      recruiterContact: 'nadia@cedar.example · +974 5555 0000',
+      companyResearch: 'Payments scale-up. Grew three times last year.',
+      status: 'Applied',
+      applicationDate: toPlainDate(new Date()),
+    });
+
+    // jsdom ships no async clipboard, so the copy path gets a stub to capture
+    // exactly what would have landed on it.
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (text: string) => void copied.push(text) },
+    });
+
+    await act(async () => {
+      root = createRoot(host);
+      root.render(createElement(App));
+      await tick();
+    });
+    await waitUntil(() => document.body.textContent?.includes('List View') === true, 'the app loaded');
+
+    // Open the row the same way a user does: click it in the list.
+    const cell = [...document.querySelectorAll('td')].find((element) => element.textContent?.trim() === 'Cedar Labs');
+    expect(cell).toBeTruthy();
+    await act(async () => {
+      cell?.click();
+      await tick();
+    });
+    await waitUntil(() => document.querySelector('[role="dialog"]') !== null, 'the edit form opened');
+
+    const dialog = () => document.querySelector('[role="dialog"]')!;
+    expect(dialog().textContent).toContain('Email draft');
+
+    // An Applied row suggests the follow-up, filled from the record: the address
+    // is found inside the free-form contact text, the date is written out.
+    const pressed = dialog().querySelector<HTMLButtonElement>('[aria-label="Email template"] button[aria-pressed="true"]');
+    expect(pressed?.textContent?.trim()).toBe('Follow-up');
+    expect((findField('To') as HTMLInputElement).value).toBe('nadia@cedar.example');
+    expect((findField('Subject') as HTMLInputElement).value).toBe(
+      'Following up: Senior Backend Engineer application at Cedar Labs',
+    );
+    expect((findField('Message') as HTMLTextAreaElement).value).toContain('https://cedar.example/jobs/7');
+    expect((findField('Message') as HTMLTextAreaElement).value).toContain('[Your name]');
+
+    // The signature name is typed in the panel, and the research notes seed the
+    // "why this company" line once the application template is chosen.
+    await changeControl(findField('Your name (signature)'), 'Noor Ahmed');
+    expect((findField('Message') as HTMLTextAreaElement).value).toContain('Kind regards,\nNoor Ahmed');
+    const templateButton = (label: string) =>
+      [...dialog().querySelectorAll<HTMLButtonElement>('[aria-label="Email template"] button')].find(
+        (element) => element.textContent?.trim() === label,
+      );
+    await act(async () => {
+      templateButton('Application')?.click();
+      await tick();
+    });
+    expect((findField('Subject') as HTMLInputElement).value).toBe(
+      'Application: Senior Backend Engineer at Cedar Labs',
+    );
+    expect((findField('Message') as HTMLTextAreaElement).value).toContain(
+      'What draws me to Cedar Labs: Payments scale-up.',
+    );
+
+    // A field typed by hand stops following the record; an untouched one keeps
+    // following it. That is the whole editing model, asserted in both halves.
+    await changeControl(findField('Message'), 'Hand-written opening line.');
+    await changeControl(findField('Company name'), 'Cedar Labs Ltd');
+    expect((findField('Message') as HTMLTextAreaElement).value).toBe('Hand-written opening line.');
+    expect((findField('Subject') as HTMLInputElement).value).toContain('Cedar Labs Ltd');
+    await clickButton('Reset text');
+    expect((findField('Message') as HTMLTextAreaElement).value).toContain('Cedar Labs Ltd');
+
+    // Copy hands over To + Subject + body, and says so in a toast.
+    await clickButton('Copy email');
+    await waitUntil(() => copied.length === 1, 'the draft reached the clipboard');
+    expect(copied[0]).toContain('To: nadia@cedar.example');
+    expect(copied[0]).toContain('Subject: Application: Senior Backend Engineer at Cedar Labs Ltd');
+    expect(copied[0]).toContain('Kind regards,\nNoor Ahmed');
+    await waitUntil(
+      () => document.body.textContent?.includes('Email draft copied') === true,
+      'the copy confirmation showed',
+    );
+
+    // The mail-app hand-off is a plain mailto: link — no send, no network.
+    const mailLink = dialog().querySelector<HTMLAnchorElement>('a[href^="mailto:"]');
+    expect(mailLink?.getAttribute('href')?.startsWith('mailto:nadia%40cedar.example?subject=Application%3A')).toBe(true);
+
+    // A draft is not a record: the unsaved company rename never reached storage.
+    const rows = await storage.records.all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.companyName).toBe('Cedar Labs');
+
+    delete (window.navigator as { clipboard?: unknown }).clipboard;
+  });
 });
 
 async function addSimpleApplication(companyName: string, jobTitle: string): Promise<void> {

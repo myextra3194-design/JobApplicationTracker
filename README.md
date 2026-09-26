@@ -78,6 +78,22 @@ with a label you type that becomes the download filename.
   in-app toasts (and pop-ups, if allowed) while the app is open — local-first
   means there is no server to wake a closed tab. Seen/fired state lives in
   capped `jat.notifications.v1` / `jat.alarms.v1` journals.
+- **Email drafts (Part 14).** The add/edit form ends with an **Email draft** panel:
+  four templates (application, follow-up, thank-you, referral ask), each written
+  from the record itself — company, role, location, portal, posting link,
+  recruiter name and the address found inside the free-form contact, the
+  application/interview dates and the research notes as the "why this company"
+  line. The template follows the stage (Saved → application, an interview marked
+  Completed or already past → thank-you) until you pick one by hand. Fields you
+  have not typed in keep following the record; fields you have edited stay yours
+  until **Reset text**. Anything the record does not have is a `[bracketed
+  placeholder]`, never a silent blank, and the panel counts them. Hand-off is
+  **Copy email** (To + Subject + body, with an `execCommand` fallback where the
+  async clipboard is unavailable) or **Open in mail app** (`mailto:`,
+  percent-encoded so spaces are not `+`, with a warning past ~1800 characters
+  because some clients truncate long URLs). Nothing is sent, nothing is stored,
+  and the signature name is typed in the panel rather than becoming a settings
+  field — a draft is not a record.
 - To wipe everything: DevTools → Application → clear site data.
 
 ## Architecture
@@ -94,6 +110,8 @@ src/lib/
   alarms.ts       Part 13 — pure alarm derivation + fire/dismiss/schedule decisions
   notifications.ts Part 13 — bell items derived from the same store snapshot
   journal.ts      Part 13 — capped seen/fired key journal (localStorage)
+  emailDraft.ts   Part 14 — email templates as pure builders: subject/body, mailto, clipboard
+  ics.ts          Part 7 — per-event .ics text + the download wrapper
   blob.ts         byte access with a FileReader fallback
   storage/
     adapter.ts            RecordStore + AttachmentStore interfaces   ← the seam
@@ -129,7 +147,8 @@ state, and it lives behind the storage adapter.
 
 ## Status
 
-Parts 1–13 of 13 are in. The data model, storage seam and verification harness (Part 1);
+Parts 1–13 of the spec are in, plus one addition of my own. The data model, storage seam and
+verification harness (Part 1);
 the add/edit list view (Part 2); the List/Board toggle with the seven-column Kanban board
 (Part 3); search/filter/sort over both views (Part 4); PDF/DOC/DOCX attachments keyed by
 application id with a per-file 5 MB limit (Part 5); clickable job links, notes/research
@@ -142,8 +161,11 @@ beside the filters; checkbox multi-select with bulk status/tag/archive and bulk 
 delete (Part 10); **backup export/import** (Part 11) — the header's Data menu writes a
 JSON backup with attachments as base64 (or a CSV of the structured fields) and reads a
 previous backup back in, merging rather than wiping; the Part 12 visual pass (theme,
-cards on mobile, toasts); and **notifications & alarms** (Part 13) — the header bell
+cards on mobile, toasts); **notifications & alarms** (Part 13) — the header bell
 with derived follow-up/interview reminders and the in-app alarm engine with optional
-OS pop-ups (see above). GitHub Pages deploy + PWA installability is in. The spec is
+OS pop-ups (see above); and **email drafts** (Part 14, not in the original spec) — the
+form's last panel writes the outreach email from the record, with four templates, copy
+and a `mailto:` hand-off (see above). GitHub Pages deploy + PWA installability is in.
+The spec is
 [`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
 progress and locked decisions are in [`PLAN.md`](PLAN.md).
