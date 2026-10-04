@@ -60,6 +60,7 @@ describe('App final-pass browser flow', () => {
     const storage = getStorage();
     const rows = await storage.records.all();
     if (rows.length > 0) await storage.bulkPurge(rows.map((row) => row.id));
+    await storage.flashcards.clear();
     // The theme toggle writes through the settings seam; reset it so a later
     // smoke case always starts from the app's dark default. Part 13's journals
     // are per-row-key, but clearing them keeps the badge deterministic.
@@ -350,6 +351,56 @@ describe('App final-pass browser flow', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 
+  it('adds a flashcard from the Study view and schedules its next recall after rating', async () => {
+    const storage = getStorage();
+    const flashcards = storage.flashcards;
+    await storage.records.replaceAll([]);
+    await flashcards.clear();
+
+    await act(async () => {
+      root = createRoot(host);
+      root.render(createElement(App));
+      await tick();
+    });
+    await waitUntil(() => document.body.textContent?.includes('List View') === true, 'the app loaded');
+    await clickButton('Study');
+    await waitUntil(() => document.body.textContent?.includes('Start with one good question') === true, 'the Study view opened');
+    await clickButton('Create your first flashcard');
+    await waitUntil(() => document.querySelector('[role="dialog"]') !== null, 'the flashcard editor opened');
+    await changeControl(findField('Deck'), 'Learning');
+    await changeControl(findField('Prompt'), 'What is active recall?');
+    await changeControl(findField('Answer'), 'Retrieving information from memory without looking at the answer.');
+    await clickButton('Add flashcard');
+    await waitUntil(async () => (await flashcards.all()).length === 1, 'the flashcard saved');
+    expect((await flashcards.all())[0]?.deck).toBe('Learning');
+
+    await clickButtonContaining('Study now');
+    await waitUntil(() => document.body.textContent?.includes('Try to answer from memory') === true, 'the review session started');
+    await clickButtonContaining('Show answer');
+    expect(document.body.textContent).toContain('Retrieving information from memory without looking at the answer.');
+    const good = document.querySelector<HTMLButtonElement>('button[aria-label="Good, review again in 1 day"]');
+    expect(good).not.toBeNull();
+    await act(async () => {
+      good?.click();
+      await tick();
+    });
+    await waitUntil(() => document.body.textContent?.includes('Session complete') === true, 'the card was scheduled');
+    await waitUntil(async () => (await flashcards.all())[0]?.repetitions === 1, 'the review rating persisted');
+    expect((await flashcards.all())[0]?.intervalDays).toBe(1);
+    await clickButton('Back to your library');
+    expect(document.body.textContent).toContain('In 24 hr');
+
+    // Text imports are parsed into editable drafts and saved only after review.
+    await clickButtonContaining('Draft from text / CSV');
+    await waitUntil(() => document.querySelector('[role="dialog"]') !== null, 'the text import opened');
+    await changeControl(findField('Paste Q&A text'), 'Q: What does spaced repetition do?\nA: Schedules reviews over time.');
+    await clickButton('Review draft cards');
+    expect(document.body.textContent).toContain('Review 1 draft card');
+    await clickButton('Add 1 flashcard');
+    await waitUntil(async () => (await flashcards.all()).length === 2, 'the reviewed draft saved');
+    expect((await flashcards.all()).some((card) => card.front === 'What does spaced repetition do?')).toBe(true);
+  });
+
   it('shows reminders in the notification bell, opens a row from one, and marks the rest read', async () => {
     const storage = getStorage();
     await storage.records.replaceAll([]);
@@ -459,6 +510,15 @@ async function keyDown(input: HTMLInputElement, key: string): Promise<void> {
 async function clickButton(label: string): Promise<void> {
   const button = [...document.querySelectorAll('button')].find((element) => element.textContent?.trim() === label);
   if (!button) throw new Error(`button not found: ${label}`);
+  await act(async () => {
+    button.click();
+    await tick();
+  });
+}
+
+async function clickButtonContaining(label: string): Promise<void> {
+  const button = [...document.querySelectorAll('button')].find((element) => element.textContent?.includes(label));
+  if (!button) throw new Error(`button containing text not found: ${label}`);
   await act(async () => {
     button.click();
     await tick();

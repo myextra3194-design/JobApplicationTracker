@@ -13,10 +13,12 @@ wins except for the locked decisions below.
   implemented from that file's own `### Part N` sections, not from a reconstruction.
 - Stack: React + Vite + Tailwind, records in localStorage, files in IndexedDB.
   No backend, no login, no component library, no state library.
-- Persistence sits behind `RecordStore` + `AttachmentStore`. UI never touches
-  `localStorage` or `indexedDB` directly; it calls `getStorage()`. `SettingsStore`
-  holds the weekly goal and the light/dark theme through the same seam. A REST +
-  SQLite adapter can replace the local pair later without rewriting components.
+- Persistence sits behind `RecordStore`, `AttachmentStore`, `SettingsStore`, and
+  `FlashcardStore`. UI never touches `localStorage` or `indexedDB` directly; it calls
+  `getStorage()`. Settings hold the weekly goal, theme, notifications and alarms;
+  study cards use their own local `FlashcardStore` document behind that same seam.
+  A REST + SQLite adapter can replace the original tracker stores later without
+  rewriting components.
 - Cadence: one part at a time. Stop for review in the live preview after each.
 - Status pipeline is the plan's seven stages:
   `Saved → Applied → Shortlisted → Interview → Offer → Rejected → Withdrawn`.
@@ -366,9 +368,9 @@ Each part: implement → `tsc -b` + `vitest run` + `npm run build` → summary �
 ## Standing rules
 
 - Nothing in UI code touches `localStorage` or `indexedDB` directly. Go through
-  `getStorage()`; persistence is `RecordStore` + `AttachmentStore`. If a part
-  needs a capability the adapter lacks, extend the interface **and**
-  `src/lib/selfTest.ts` in the same commit.
+  `getStorage()`; persistence is `RecordStore`, `AttachmentStore`, `SettingsStore`,
+  and `FlashcardStore`. If a part needs a capability the adapter lacks, extend the
+  interface **and** `src/lib/selfTest.ts` in the same commit.
 - Field names stay exactly as the table above. Any future rename gets a PLAN.md line.
 - Archive is never the same as permanent delete. Files cascade only on permanent delete.
 - All reads/writes pass through the single normaliser in `src/lib/normalize.ts`.
@@ -388,3 +390,25 @@ Swap the local adapters for `RestAdapter`: Express/Fastify + SQLite, same record
 shape, plus `owner_id` and a login if it ever leaves one browser. Attachments move
 from IndexedDB to disk/object storage behind the same `AttachmentStore` interface.
 No component rewrites if Parts 1–12 keep the seam.
+
+---
+
+## Study Tool 3 — Digital Flashcards & Spaced Review (2026-10-04)
+
+This is an incremental feature outside the original 13-part tracker plan. It lives in
+the existing app under a **Study** view and is deliberately the only recall tool
+implemented in this session.
+
+- `FlashcardStore` is exposed by `getStorage()` and persists to
+  `jat.flashcards.v1`; malformed JSON is quarantined under the matching `.corrupt`
+  key rather than discarded. This remains per browser/install.
+- Manual card/deck editing and text/CSV/TSV/Markdown Q&A imports are supported. Text
+  imports create editable drafts and are not saved until the user approves them.
+- PDF, DOCX, PPTX, and photo OCR are **not** simulated or sent to a service. They
+  require a selected multimodal agent; the screenshot/list of available agents is
+  still needed before recommending or connecting one.
+- Review ratings use a simplified adaptive SM-2 schedule: Again retries in ten
+  minutes; Hard, Good, and Easy grow intervals using the card's review history and
+  ease factor. The browser-path self-test asserts a persistence/schedule round-trip.
+- The existing Data-menu application backup does not yet include flashcards. Keep
+  that limitation visible until study backup/export is implemented separately.

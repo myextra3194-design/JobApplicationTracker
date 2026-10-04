@@ -1,8 +1,9 @@
 import type { StorageDriver } from '../types';
+import { LocalFlashcardStore } from '../study/store';
 import { LocalRecordStore } from './localRecordStore';
 import { IdbAttachmentStore } from './idbAttachmentStore';
 import { LocalSettingsStore } from './localSettingsStore';
-import type { AttachmentStore, RecordStore, TrackerStorage } from './adapter';
+import type { AttachmentStore, FlashcardStore, RecordStore, TrackerStorage } from './adapter';
 
 /**
  * Single entry point for persistence. Components call `getStorage()`, never a
@@ -91,12 +92,14 @@ export function getStorage(): TrackerStorage {
   const records: RecordStore = new LocalRecordStore();
   const attachments: AttachmentStore = new IdbAttachmentStore();
   const settings = new LocalSettingsStore();
+  const flashcards: FlashcardStore = new LocalFlashcardStore();
 
   cache = {
     driver: 'local',
     records,
     attachments,
     settings,
+    flashcards,
     // Files are keyed by application id (Part 5). Cascade only on permanent delete.
     purge: (id: string) => purgeApplication(id, { records, attachments }),
     // Part 10: the Archived tab's "Delete selected permanently" — same cascade, looped.
@@ -111,4 +114,5 @@ export async function resetStorage(): Promise<void> {
   for (const record of await storage.records.all()) {
     await storage.purge(record.id);
   }
+  await storage.flashcards.clear();
 }

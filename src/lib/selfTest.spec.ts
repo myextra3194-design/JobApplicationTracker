@@ -16,12 +16,16 @@ describe('runSelfTests() against a real storage stack', () => {
     const results = await runSelfTests();
     const failures = results.filter((r) => !r.ok).map((r) => `${r.name}: ${r.detail}`);
     expect(failures).toEqual([]);
-    expect(results.length).toBe(16); // one per foundation guarantee; add one when you add a check
+    expect(results.length).toBe(17); // one per foundation guarantee; add one when you add a check
 
     const blobCheck = results.find((r) => r.name === 'IndexedDB blob round-trip');
     expect(blobCheck, 'blob check must run in this environment').toBeDefined();
     expect(blobCheck?.skipped, 'the blob check must not be skipped here').toBe(false);
     expect(blobCheck?.ok).toBe(true);
+
+    const flashcardCheck = results.find((r) => r.name === 'flashcard storage + schedule round-trip');
+    expect(flashcardCheck, 'flashcard persistence check must be registered').toBeDefined();
+    expect(flashcardCheck?.ok, flashcardCheck?.detail).toBe(true);
   });
 
   it('proves the Part 5 cascade: permanent delete takes the files, soft delete does not', async () => {
@@ -62,9 +66,11 @@ describe('runSelfTests() against a real storage stack', () => {
     for (const suffix of [
       'permanent-delete-cascades-files-soft-delete-keeps-them',
       'backup-export-import-round-trips-records-and-files',
+      'flashcards',
     ]) {
       const key = `${SELF_TEST_PREFIX}${suffix}`;
       expect(globalThis.localStorage.getItem(key), `${key} left behind`).toBeNull();
+      expect(globalThis.localStorage.getItem(`${key}.corrupt`), `${key}.corrupt left behind`).toBeNull();
     }
     await real.clear();
   });
