@@ -2,10 +2,11 @@
 
 Track job applications from **Saved** through to a final result: follow-up and interview
 dates, recruiter contacts, CV attachments, tags, company research notes, and a dashboard
-with a weekly application goal.
+with a weekly application goal. The **Study** area also includes local flashcard decks,
+reviewable text/CSV imports, and adaptive spaced recall.
 
 Runs entirely in your browser. **No backend, no account, no network calls** — your
-applications never leave this device.
+applications and study cards never leave this device.
 
 ## Run it
 
@@ -56,7 +57,11 @@ worker (`public/sw.js`), so you can install it to your home screen and it starts
 | What | Where | Key |
 | --- | --- | --- |
 | Applications | `localStorage` | `jat.applications.v1` |
+| Study flashcards + review schedule | `localStorage` | `jat.flashcards.v1` |
 | Files (CVs, screenshots) | `IndexedDB` | db `jat-files`, store `attachments` |
+
+Flashcards are stored separately from applications. The current **Data** menu backup covers
+job records and their attachments only; flashcard backup/export is not included yet.
 
 Records are one JSON document `{ version, savedAt, records: [...] }`. Files are stored as
 bytes in IndexedDB because `localStorage` is a string API and cannot hold a PDF. Files are
@@ -95,28 +100,34 @@ src/lib/
   notifications.ts Part 13 — bell items derived from the same store snapshot
   journal.ts      Part 13 — capped seen/fired key journal (localStorage)
   blob.ts         byte access with a FileReader fallback
+  study/
+    cards.ts       create/normalise flashcards before they reach the UI
+    schedule.ts    adaptive Again / Hard / Good / Easy review intervals
+    import.ts      local Q&A text and CSV/TSV parsing into editable drafts
+    store.ts       localStorage flashcard adapter
   storage/
-    adapter.ts            RecordStore + AttachmentStore interfaces   ← the seam
+    adapter.ts            RecordStore + AttachmentStore + SettingsStore + FlashcardStore
     localRecordStore.ts   localStorage implementation
     idbAttachmentStore.ts IndexedDB implementation (files, keyed by application id)
-    index.ts              getStorage() + purgeApplication() — the only place
-                          either adapter is chosen, and the one cascade path
+    index.ts              getStorage() + purgeApplication() — the central seam
+                          and the one attachment cascade path
 ```
 
 **Nothing in the UI touches `localStorage` or `indexedDB` directly.** Components call
-`getStorage()`. That is what makes the backend optional rather than a rewrite: a REST +
-SQLite implementation of the same two interfaces can be swapped in behind
-`VITE_STORAGE_DRIVER=rest` without touching a component. See `PLAN.md`.
+`getStorage()`. The record/attachment seam is designed so a REST adapter can replace
+those implementations without component changes; study cards currently use a separate
+local adapter behind the same storage entry point. See `PLAN.md`.
 
 Named Part 1 helpers (`getAllApplications`, `saveApplication`, `deleteApplication`) are
 thin wrappers over that seam.
 
-`src/lib/selfTest.ts` runs 16 checks against the real storage stack in the browser —
+`src/lib/selfTest.ts` runs 17 checks against the real storage stack in the browser —
 CRUD, undo-delete, archive, bulk edits, concurrent writes, corrupt-data recovery, a
 byte-exact file round-trip, the attachment cascade (files survive archive and
-undo-delete, and go with the record on permanent delete), and a backup round-trip:
-export, empty the store, re-import, and assert the records and the attachment bytes
-come back identical with a second import adding nothing. This is a development-only
+undo-delete, and go with the record on permanent delete), a flashcard + schedule
+round-trip, and a backup round-trip: export, empty the store, re-import, and assert
+the records and attachment bytes come back identical with a second import adding
+nothing. This is a development-only
 harness (`npm test` runs it under jsdom); its results panel was removed from the app
 UI, so the home page no longer shows any test log. Each check uses its own isolated
 key, so running it never touches your data.
@@ -144,6 +155,12 @@ JSON backup with attachments as base64 (or a CSV of the structured fields) and r
 previous backup back in, merging rather than wiping; the Part 12 visual pass (theme,
 cards on mobile, toasts); and **notifications & alarms** (Part 13) — the header bell
 with derived follow-up/interview reminders and the in-app alarm engine with optional
-OS pop-ups (see above). GitHub Pages deploy + PWA installability is in. The spec is
+OS pop-ups (see above). GitHub Pages deploy + PWA installability is in.
+
+Beyond the original tracker plan, **Recall Tool 3 — Digital Flashcards & Spaced Review**
+is now in the Study view: manual decks, reviewable Q&A text/CSV/TSV/Markdown imports,
+Again/Hard/Good/Easy ratings, adaptive intervals, and browser-local persistence. The
+multimodal photo/PDF/Office assistant is not connected yet; it needs the agent choice
+from the screenshot the user plans to provide. The original tracker spec is
 [`job-application-tracker-build-plan.md`](job-application-tracker-build-plan.md);
 progress and locked decisions are in [`PLAN.md`](PLAN.md).

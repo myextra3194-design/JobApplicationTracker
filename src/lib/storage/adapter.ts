@@ -1,11 +1,12 @@
 import type { JobApplication, JobApplicationPatch, NewJobApplication, StorageDriver } from '../types';
 import type { ApplicationQuery } from '../query';
+import type { Flashcard } from '../study/types';
 
 /**
  * THE SEAM. Nothing in the UI touches localStorage or IndexedDB directly; it goes
- * through these two interfaces. That is the whole backend-readiness promise from
- * the plan: swap these implementations for `fetch()`-based ones and the components
- * keep working (PLAN.md, Optional Later Upgrade).
+ * through the store interfaces below, all exposed by `getStorage()`. The original
+ * tracker stores can be replaced by fetch-based adapters without rewriting their
+ * components; study cards currently remain browser-local.
  */
 
 export class NotFoundError extends Error {
@@ -111,11 +112,22 @@ export interface SettingsStore {
   set(patch: Partial<TrackerSettings>): Promise<TrackerSettings>;
 }
 
+/** Study Tool 3 data: still browser-local, but scheduled independently of job records. */
+export interface FlashcardStore {
+  all(): Promise<Flashcard[]>;
+  put(card: Flashcard): Promise<Flashcard>;
+  /** Add or replace many cards with one atomic localStorage write. */
+  putMany(cards: readonly Flashcard[]): Promise<Flashcard[]>;
+  delete(id: string): Promise<void>;
+  clear(): Promise<void>;
+}
+
 export interface TrackerStorage {
   readonly driver: StorageDriver;
   readonly records: RecordStore;
   readonly attachments: AttachmentStore;
   readonly settings: SettingsStore;
+  readonly flashcards: FlashcardStore;
   /** Permanent delete of a record AND its files, so nothing is orphaned. */
   purge(id: string): Promise<void>;
   /**

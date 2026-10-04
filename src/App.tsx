@@ -4,6 +4,7 @@ import { ApplicationList } from './components/ApplicationList';
 import { ArchivedList } from './components/ArchivedList';
 import { DataMenu } from './components/DataMenu';
 import { FilterBar } from './components/FilterBar';
+import { FlashcardsPanel } from './components/FlashcardsPanel';
 import { KanbanBoard } from './components/KanbanBoard';
 import { NotificationCenter } from './components/NotificationCenter';
 import { ToastHost } from './components/ToastHost';
@@ -26,7 +27,7 @@ import type { TrackerSettings } from './lib/storage/adapter';
 import { pushToast } from './lib/toast';
 import type { ApplicationStatus, JobApplication } from './lib/types';
 
-type ViewMode = 'list' | 'board' | 'upcoming' | 'archived';
+type ViewMode = 'list' | 'board' | 'upcoming' | 'archived' | 'study';
 
 /**
  * Part 9: archive, restore & permanent delete. The list's Delete became
@@ -406,13 +407,15 @@ export default function App() {
             <span aria-hidden>{theme === 'dark' ? '☀️' : '🌙'}</span>
             <span className="hidden sm:inline">{theme === 'dark' ? 'Light' : 'Dark'}</span>
           </button>
-          <button
-            type="button"
-            onClick={openAdd}
-            className="gradient-accent inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-sm font-semibold shadow-md"
-          >
-            Add <span className="hidden sm:inline">Application</span>
-          </button>
+          {view !== 'study' ? (
+            <button
+              type="button"
+              onClick={openAdd}
+              className="gradient-accent inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-sm font-semibold shadow-md"
+            >
+              Add <span className="hidden sm:inline">Application</span>
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -438,6 +441,7 @@ export default function App() {
                   ['board', 'Board View'],
                   ['upcoming', 'Upcoming'],
                   ['archived', 'Archived'],
+                  ['study', 'Study'],
                 ] as const
               ).map(([mode, label]) => (
                 <button
@@ -469,7 +473,9 @@ export default function App() {
               </div>
             ) : null}
 
-            {view === 'list' ? (
+            {view === 'study' ? (
+              <FlashcardsPanel />
+            ) : view === 'list' ? (
               <ApplicationList
                 rows={listRows}
                 filtered={liveRows.length > 0}
@@ -586,6 +592,16 @@ const MOBILE_NAV_ITEMS: readonly {
     icon: (
       <svg viewBox="0 0 20 20" aria-hidden className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 6.5h14M4.5 6.5l.8 8.6a1.6 1.6 0 0 0 1.6 1.4h6.2a1.6 1.6 0 0 0 1.6-1.4l.8-8.6M8 10h4" />
+      </svg>
+    ),
+  },
+  {
+    mode: 'study',
+    label: 'Study',
+    icon: (
+      <svg viewBox="0 0 20 20" aria-hidden className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <rect x="3" y="4" width="10.5" height="12" rx="1.8" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 7.5h4.5M6 10h4.5M6 12.5h3M14 6h2a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2" />
       </svg>
     ),
   },

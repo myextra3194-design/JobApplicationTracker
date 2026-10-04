@@ -6,6 +6,9 @@ import { bulkPurgeApplications, purgeApplication } from './storage';
 import { IdbAttachmentStore } from './storage/idbAttachmentStore';
 import { corruptKeyFor, LocalRecordStore } from './storage/localRecordStore';
 import { LocalSettingsStore } from './storage/localSettingsStore';
+import { createFlashcard } from './study/cards';
+import { rateFlashcard } from './study/schedule';
+import { LocalFlashcardStore } from './study/store';
 
 /**
  * Part 1 acceptance harness.
@@ -58,6 +61,42 @@ async function runCheck(name: string, fn: (store: LocalRecordStore) => Promise<s
     }
     const message = err instanceof Error ? err.message : String(err);
     return { name, ok: false, skipped: false, detail: message, ms: Math.max(0, Math.round(performance.now() - started)) };
+  } finally {
+    await store.clear();
+  }
+}
+
+async function runFlashcardCheck(): Promise<CheckResult> {
+  const key = `${SELF_TEST_PREFIX}flashcards`;
+  const store = new LocalFlashcardStore(key);
+  await store.clear();
+  const started = performance.now();
+  try {
+    const now = new Date('2026-10-04T12:00:00.000Z');
+    const created = createFlashcard('Self-test prompt', 'Self-test answer', 'Self-test deck', now);
+    await store.put(created);
+    const read = await store.all();
+    assert(read.length === 1 && read[0]?.front === created.front, 'flashcard did not round-trip through its store');
+    const reviewed = rateFlashcard(read[0]!, 'good', now);
+    await store.put(reviewed);
+    const scheduled = (await store.all())[0];
+    assert(scheduled?.repetitions === 1, 'review repetition count did not persist');
+    assert(scheduled?.dueAt === '2026-10-05T12:00:00.000Z', 'next review date did not persist');
+    return {
+      name: 'flashcard storage + schedule round-trip',
+      ok: true,
+      skipped: false,
+      detail: 'a card and its adaptive one-day review schedule were saved and re-read',
+      ms: Math.max(0, Math.round(performance.now() - started)),
+    };
+  } catch (error) {
+    return {
+      name: 'flashcard storage + schedule round-trip',
+      ok: false,
+      skipped: false,
+      detail: error instanceof Error ? error.message : String(error),
+      ms: Math.max(0, Math.round(performance.now() - started)),
+    };
   } finally {
     await store.clear();
   }
@@ -563,6 +602,7 @@ export async function runSelfTests(): Promise<CheckResult[]> {
         await attachments.removeAllFor(idB);
       }
     }),
+    runFlashcardCheck(),
   ];
 
   const results = await Promise.all(checks);
